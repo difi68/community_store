@@ -51,6 +51,9 @@ class Order
     /** @Column(type="text") */
     protected $smName;
 
+    /** @Column(type="text",nullable=true) */
+    protected $sInstructions;
+
     /** @Column(type="decimal", precision=10, scale=2) * */
     protected $oShippingTotal;
 
@@ -105,6 +108,11 @@ class Order
     public function setShippingMethodName($smName)
     {
         $this->smName = $smName;
+    }
+
+    public function setShippingInstructions($sInstructions)
+    {
+        $this->sInstructions = $sInstructions;
     }
 
     public function setShippingTotal($shippingTotal)
@@ -166,6 +174,11 @@ class Order
     public function getShippingMethodName()
     {
         return $this->smName;
+    }
+
+    public function getShippingInstructions()
+    {
+        return $this->sInstructions;
     }
 
     public function getShippingTotal()
@@ -281,6 +294,8 @@ class Order
         $customer = new StoreCustomer();
         $now = new \DateTime();
         $smName = StoreShippingMethod::getActiveShippingLabel();
+        $sInstructions = StoreCart::getShippingInstructions();
+        StoreCart::getShippingInstructions('');
         $shippingTotal = StoreCalculator::getShippingTotal();
         $taxes = StoreTax::getConcatenatedTaxStrings();
         $totals = StoreCalculator::getTotals();
@@ -292,6 +307,7 @@ class Order
         $order->setDate($now);
         $order->setPaymentMethodName($pmName);
         $order->setShippingMethodName($smName);
+        $order->setShippingInstructions($sInstructions);
         $order->setShippingTotal($shippingTotal);
         $order->setTaxTotal($taxes['taxTotals']);
         $order->setTaxIncluded($taxes['taxIncludedTotals']);
@@ -309,6 +325,14 @@ class Order
             $orderDiscount->setOrder($order);
             if ($discount->getTrigger() == 'code') {
                 $orderDiscount->setCode(Session::get('communitystore.code'));
+
+                if ($discount->isSingleUse()) {
+                    $code = StoreDiscountCode::getByCode(Session::get('communitystore.code'));
+                    if ($code) {
+                        $code->setOID($order->getOrderID());
+                        $code->save();
+                    }
+                }
             }
             $orderDiscount->setDisplay($discount->getDisplay());
             $orderDiscount->setName($discount->getName());
@@ -417,7 +441,7 @@ class Order
 
         $fromName = Config::get('community_store.emailalertsname');
 
-        $smID = \Session::get('smID');
+        $smID = \Session::get('community_store.smID');
         $groupstoadd = array();
         $createlogin = false;
         $orderItems = $this->getOrderItems();
@@ -529,7 +553,7 @@ class Order
             $customer->setValue('billing_address', $billing_address);
             $customer->setValue('billing_phone', $billing_phone);
 
-            if ($smID) {
+            if ($order->isShippable()) {
                 $customer->setValue('shipping_first_name', $shipping_first_name);
                 $customer->setValue('shipping_last_name', $shipping_last_name);
                 $customer->setValue('shipping_address', $shipping_address);
@@ -538,7 +562,7 @@ class Order
             //add user to Store Customers group
             $group = \Group::getByName('Store Customer');
             if (is_object($group) || $group->getGroupID() < 1) {
-                $user->enterGroup($group);
+                $user->getUserObject()->enterGroup($group);
             }
 
             foreach ($groupstoadd as $id) {
@@ -561,8 +585,14 @@ class Order
         //send out the alerts
         $mh = new MailService();
 
-        $alertEmails = explode(",", Config::get('community_store.notificationemails'));
-        $alertEmails = array_map('trim', $alertEmails);
+        $notificationEmails = explode(",", Config::get('community_store.notificationemails'));
+        $notificationEmails = array_map('trim', $notificationEmails);
+
+        // Create "on_before_community_store_order_notification_emails" event and dispatch
+        $event = new StoreOrderEvent($this);
+        $event->setNotificationEmails($notificationEmails);
+        $event = Events::dispatch('on_before_community_store_order_notification_emails', $event);
+        $notificationEmails = $event->getNotificationEmails();
 
         //receipt
         if ($fromName) {
@@ -586,9 +616,9 @@ class Order
             $mh->from($fromEmail);
         }
 
-        foreach ($alertEmails as $alertEmail) {
-            if ($alertEmail) {
-                $mh->to($alertEmail);
+        foreach ($notificationEmails as $notificationEmail) {
+            if ($notificationEmail) {
+                $mh->to($notificationEmail);
                 $validNotification = true;
             }
         }
@@ -600,7 +630,7 @@ class Order
         }
 
         // unset the shipping type, as next order might be unshippable
-        \Session::set('smID', '');
+        \Session::set('community_store.smID', '');
 
         StoreCart::clear();
 
@@ -646,6 +676,19 @@ class Order
             $laststatus = $history[0];
 
             return $laststatus->getOrderStatusName();
+        } else {
+            return '';
+        }
+    }
+
+    public function getStatusHandle()
+    {
+        $history = StoreOrderStatusHistory::getForOrder($this);
+
+        if (!empty($history)) {
+            $laststatus = $history[0];
+
+            return $laststatus->getOrderStatusHandle();
         } else {
             return '';
         }

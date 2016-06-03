@@ -2,7 +2,22 @@
 defined('C5_EXECUTE') or die(_("Access Denied."));
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductVariation\ProductVariation as StoreProductVariation;
 if($products){
-    echo "<div class='store-product-list row'>";
+
+    $columnClass = 'col-md-12';
+
+    if ($productsPerRow == 2) {
+        $columnClass = 'col-md-6';
+    }
+
+    if ($productsPerRow == 3) {
+        $columnClass = 'col-md-4';
+    }
+
+    if ($productsPerRow == 4) {
+        $columnClass = 'col-md-3';
+    }
+
+    echo '<div class="store-product-list row store-product-list-per-row-'. $productsPerRow .'">';
 
     $i=1;
     foreach($products as $product){
@@ -28,21 +43,6 @@ if($products){
             $activeclass =  'on-product-page';
         }
 
-        $columnClass = 'col-md-12';
-
-        if ($productsPerRow == 2) {
-            $columnClass = 'col-md-6';
-        }
-
-        if ($productsPerRow == 3) {
-            $columnClass = 'col-md-4';
-        }
-
-        if ($productsPerRow == 4) {
-            $columnClass = 'col-md-3';
-        }
-
-
     ?>
     
         <div class="store-product-list-item <?= $columnClass; ?> <?= $activeclass; ?>">
@@ -54,13 +54,16 @@ if($products){
                         $thumb = $ih->getThumbnail($imgObj,400,280,true);?>
                         <p class="store-product-list-thumbnail">
                             <?php if($showQuickViewLink){ ?>
-                            <a class="store-product-quick-view" data-product-id="<?= $product->getID()?>" href="#">
-                                <img src="<?= $thumb->src?>" class="img-responsive">
-                            </a>
+                                <a class="store-product-quick-view" data-product-id="<?= $product->getID()?>" href="#">
+                                    <img src="<?= $thumb->src?>" class="img-responsive">
+                                </a>
+                            <?php } elseif ($showPageLink) { ?>
+                                <a href="<?= \URL::to(Page::getByID($product->getPageID()))?>">
+                                    <img src="<?= $thumb->src?>" class="img-responsive">
+                                </a>
                             <?php } else { ?>
-                            <img src="<?= $thumb->src?>" class="img-responsive">
+                                <img src="<?= $thumb->src?>" class="img-responsive">
                             <?php } ?>
-
                         </p>
                 <?php
                     }// if is_obj
@@ -81,7 +84,7 @@ if($products){
                 <div class="store-product-list-description"><?= $product->getDesc()?></div>
                 <?php } ?>
                 <?php if($showPageLink){?>
-                <p><a href="<?= \URL::page(Page::getByID($product->getPageID()))?>" class="store-btn-more-details btn btn-default"><?= t("More Details")?></a></p>
+                <p class="store-btn-more-details-container"><a href="<?= \URL::to(Page::getByID($product->getPageID()))?>" class="store-btn-more-details btn btn-default"><?= t("More Details")?></a></p>
                 <?php } ?>
                 <?php if($showAddToCart){ ?>
 
@@ -118,87 +121,86 @@ if($products){
                 <input type="hidden" name="pID" value="<?= $product->getID()?>">
 
 
-                <p><button data-add-type="list" data-product-id="<?= $product->getID()?>" class="store-btn-add-to-cart btn btn-primary <?= ($product->isSellable() ? '' : 'hidden');?> "><?=  ($btnText ? h($btnText) : t("Add to Cart"))?></button></p>
+                <p class="store-btn-add-to-cart-container"><button data-add-type="list" data-product-id="<?= $product->getID()?>" class="store-btn-add-to-cart btn btn-primary <?= ($product->isSellable() ? '' : 'hidden');?> "><?=  ($btnText ? h($btnText) : t("Add to Cart"))?></button></p>
                 <p class="store-out-of-stock-label alert alert-warning <?= ($product->isSellable() ? 'hidden' : '');?>"><?= t("Out of Stock")?></p>
 
                 <?php } ?>
 
+                <?php if ($product->hasVariations() && !empty($variationLookup)) {?>
+                    <script>
+                        $(function() {
+                            <?php
+                            $varationData = array();
+                            foreach($variationLookup as $key=>$variation) {
+                                $product->setVariation($variation);
+
+                                $imgObj = $product->getImageObj();
+
+                                if ($imgObj) {
+                                    $thumb = Core::make('helper/image')->getThumbnail($imgObj,400,280,true);
+                                }
+
+                                $varationData[$key] = array(
+                                'price'=>$product->getFormattedOriginalPrice(),
+                                'saleprice'=>$product->getFormattedSalePrice(),
+                                'available'=>($variation->isSellable()),
+                                'imageThumb'=>$thumb ? $thumb->src : '',
+                                'image'=>$imgObj ? $imgObj->getRelativePath() : '');
+
+                            } ?>
+
+
+                            $('#store-form-add-to-cart-list-<?= $product->getID()?> select').change(function(){
+                                var variationdata = <?= json_encode($varationData); ?>;
+                                var ar = [];
+
+                                $('#store-form-add-to-cart-list-<?= $product->getID()?> select').each(function(){
+                                    ar.push($(this).val());
+                                })
+
+                                ar.sort();
+
+                                var pli = $(this).closest('.store-product-list-item');
+
+                                if (variationdata[ar.join('_')]['saleprice']) {
+                                    var pricing =  '<span class="store-sale-price">'+ variationdata[ar.join('_')]['saleprice']+'</span>' +
+                                        ' <?= t('was');?> ' + '<span class="store-original-price">' + variationdata[ar.join('_')]['price'] +'</span>';
+
+                                    pli.find('.store-product-list-price').html(pricing);
+
+                                } else {
+                                    pli.find('.store-product-list-price').html(variationdata[ar.join('_')]['price']);
+                                }
+
+                                if (variationdata[ar.join('_')]['available']) {
+                                    pli.find('.store-out-of-stock-label').addClass('hidden');
+                                    pli.find('.store-btn-add-to-cart').removeClass('hidden');
+                                } else {
+                                    pli.find('.store-out-of-stock-label').removeClass('hidden');
+                                    pli.find('.store-btn-add-to-cart').addClass('hidden');
+                                }
+
+                                if (variationdata[ar.join('_')]['imageThumb']) {
+                                    var image = pli.find('.store-product-list-thumbnail img');
+
+                                    if (image) {
+                                        image.attr('src', variationdata[ar.join('_')]['imageThumb']);
+
+                                    }
+                                }
+
+                            });
+                        });
+                    </script>
+                <?php } ?>
+
             </form><!-- .product-list-item-inner -->
         </div><!-- .product-list-item -->
-
-
-        <?php if ($product->hasVariations() && !empty($variationLookup)) {?>
-            <script>
-                $(function() {
-                    <?php
-                    $varationData = array();
-                    foreach($variationLookup as $key=>$variation) {
-                        $product->setVariation($variation);
-
-                        $imgObj = $product->getImageObj();
-
-                        if ($imgObj) {
-                            $thumb = Core::make('helper/image')->getThumbnail($imgObj,400,280,true);
-                        }
-
-                        $varationData[$key] = array(
-                        'price'=>$product->getFormattedOriginalPrice(),
-                        'saleprice'=>$product->getFormattedSalePrice(),
-                        'available'=>($variation->isSellable()),
-                        'imageThumb'=>$thumb ? $thumb->src : '',
-                        'image'=>$imgObj ? $imgObj->getRelativePath() : '');
-
-                    } ?>
-
-
-                    $('#store-form-add-to-cart-list-<?= $product->getID()?> select').change(function(){
-                        var variationdata = <?= json_encode($varationData); ?>;
-                        var ar = [];
-
-                        $('#store-form-add-to-cart-list-<?= $product->getID()?> select').each(function(){
-                            ar.push($(this).val());
-                        })
-
-                        ar.sort();
-
-                        var pli = $(this).closest('.store-product-list-item');
-
-                        if (variationdata[ar.join('_')]['saleprice']) {
-                            var pricing =  '<span class="store-sale-price">'+ variationdata[ar.join('_')]['saleprice']+'</span>' +
-                               ' <?= t('was');?> ' + '<span class="store-original-price">' + variationdata[ar.join('_')]['price'] +'</span>';
-
-                            pli.find('.store-product-list-price').html(pricing);
-
-                        } else {
-                            pli.find('.store-product-list-price').html(variationdata[ar.join('_')]['price']);
-                        }
-
-                        if (variationdata[ar.join('_')]['available']) {
-                            pli.find('.store-out-of-stock-label').addClass('hidden');
-                            pli.find('.store-btn-add-to-cart').removeClass('hidden');
-                        } else {
-                            pli.find('.store-out-of-stock-label').removeClass('hidden');
-                            pli.find('.store-btn-add-to-cart').addClass('hidden');
-                        }
-
-                        if (variationdata[ar.join('_')]['imageThumb']) {
-                            var image = pli.find('.store-product-list-thumbnail img');
-
-                            if (image) {
-                                image.attr('src', variationdata[ar.join('_')]['imageThumb']);
-
-                            }
-                        }
-
-                    });
-                });
-            </script>
-        <?php } ?>
         
         <?php 
             if($i%$productsPerRow==0){
                 echo "</div>";
-                echo "<div class='store-product-list row'>";
+                echo '<div class="store-product-list row store-product-list-per-row-'. $productsPerRow .'">';
             }
         
         $i++;
@@ -216,5 +218,5 @@ if($products){
     
 } //if products
 else { ?>
-    <div class="alert alert-info"><?= t("No Products Available")?></div>
+    <p class="alert alert-info"><?= t("No Products Available")?></p>
 <?php } ?>

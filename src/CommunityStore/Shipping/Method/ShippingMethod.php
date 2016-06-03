@@ -2,6 +2,7 @@
 namespace Concrete\Package\CommunityStore\Src\CommunityStore\Shipping\Method;
 
 use Database;
+use Package;
 use View;
 use Illuminate\Filesystem\Filesystem;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Shipping\Method\ShippingMethodTypeMethod as StoreShippingMethodTypeMethod;
@@ -216,8 +217,10 @@ class ShippingMethod
 
     public function getShippingMethodSelector()
     {
-        if (Filesystem::exists(DIR_BASE."/application/elements/checkout/shipping_methods.php")) {
+        if (Filesystem::exists(DIR_BASE . "/application/elements/checkout/shipping_methods.php")) {
             View::element("checkout/shipping_methods");
+        } else if (Filesystem::exists(DIR_BASE . "/packages/" . $this->getPackageHandle() . "/elements/checkout/shipping_methods.php")) {
+            View::element("checkout/shipping_methods", $this, $this->getPackageHandle());
         } else {
             View::element("checkout/shipping_methods", "community_store");
         }
@@ -225,7 +228,7 @@ class ShippingMethod
 
     public static function getActiveShippingMethod()
     {
-        $smID = \Session::get('smID');
+        $smID = \Session::get('community_store.smID');
         if ($smID) {
             $sm = self::getByID($smID);
 
@@ -245,4 +248,9 @@ class ShippingMethod
 
        return '';
     }
+
+    public function getPackageHandle() {
+        return Package::getByID($this->getShippingMethodType()->getPackageID())->getPackageHandle();
+    }
+
 }

@@ -4,13 +4,12 @@ defined('C5_EXECUTE') or die(_("Access Denied."));
 if (is_object($product)) {
     ?>
 
-    <form class="store-product-block" id="store-form-add-to-cart-<?= $product->getID() ?>" itemscope itemtype="http://schema.org/Product">
-
+    <form class="store-product store-product-block" id="store-form-add-to-cart-<?= $product->getID() ?>" itemscope itemtype="http://schema.org/Product">
         <div class="row">
             <?php if ($showImage){ ?>
-            <div class="col-md-6">
+            <div class="store-product-details col-md-6">
                 <?php } else { ?>
-                <div class="col-md-12">
+                <div class="store-product-details col-md-12">
                     <?php } ?>
                     <?php if ($showProductName) { ?>
                         <h1 class="store-product-name" itemprop="name"><?= $product->getName() ?></h1>
@@ -124,7 +123,7 @@ if (is_object($product)) {
                 </div>
 
                 <?php if ($showImage) { ?>
-                    <div class="product-image col-md-6">
+                    <div class="store-product-image col-md-6">
                         <p>
                         <?php
                         $imgObj = $product->getImageObj();
@@ -185,6 +184,8 @@ if (is_object($product)) {
 
                 $imgObj = $variation->getVariationImageObj();
 
+                $thumb = false;
+
                 if ($imgObj) {
                     $thumb = Core::make('helper/image')->getThumbnail($imgObj,600,800,true);
                 }
@@ -208,7 +209,7 @@ if (is_object($product)) {
                 })
 
                 ar.sort();
-                var pdb = $(this).closest('.store-product-detail-block');
+                var pdb = $(this).closest('.store-product-block');
 
                 if (variationdata[ar.join('_')]['saleprice']) {
                     var pricing = '<span class="store-sale-price"><?= t("On Sale: "); ?>' + variationdata[ar.join('_')]['saleprice'] + '</span>' +
@@ -245,5 +246,5 @@ if (is_object($product)) {
     </script>
 
 <?php } else { ?>
-    <div class="alert alert-info"><?= t("Product not available") ?></div>
+    <p class="alert alert-info"><?= t("Product not available") ?></p>
 <?php } ?>

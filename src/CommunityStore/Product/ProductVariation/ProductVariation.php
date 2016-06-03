@@ -435,9 +435,9 @@ class ProductVariation
                     $variation->setVariationQty($data['pvQty'][$key]);
                     $variation->setVariationQtyUnlim($data['pvQtyUnlim'][$key]);
                     $variation->setVariationFID($data['pvfID'][$key]);
-                    $variation->setVariationWidth($data['pvWeight'][$key]);
+                    $variation->setVariationWeight($data['pvWeight'][$key]);
                     $variation->setVariationNumberItems($data['pvNumberItems'][$key]);
-                    $variation->setVariationWeight($data['pvWidth'][$key]);
+                    $variation->setVariationWidth($data['pvWidth'][$key]);
                     $variation->setVariationHeight($data['pvHeight'][$key]);
                     $variation->setVariationLength($data['pvLength'][$key]);
                     $variation->save();
@@ -472,6 +472,14 @@ class ProductVariation
         $em = $db->getEntityManager();
 
         return $em->find(get_class(), $pvID);
+    }
+
+    public static function getBySKU($pvSKU)
+    {
+        $db = \Database::connection();
+        $em = $db->getEntityManager();
+
+        return $em->getRepository(get_class())->findOneBy(array('pvSKU' => $pvSKU));
     }
 
     public static function add($productID, $data)

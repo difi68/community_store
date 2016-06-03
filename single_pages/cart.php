@@ -35,7 +35,7 @@ $i=1;
 
 ?>
 <form method="post" class="form-inline">
-<table id="store-cart" class="table table-hover table-condensed" >
+<table id="store-cart" class="store-cart-table store-cart-page-table table table-hover table-condensed" >
     <thead>
     <tr>
         <th><?= t('Product'); ?></th>
@@ -91,7 +91,7 @@ $i=1;
             <?php
             $salePrice = $product->getSalePrice();
             if(isset($salePrice) && $salePrice != ""){
-                echo '<span class="original-price">'.StorePrice::format($product->getPrice()).'</span>';
+                //echo '<span class="original-price">'.StorePrice::format($product->getPrice()).'</span>';
                 echo '<span class="sale-price">'.StorePrice::format($salePrice).'</span>';
             } else {
                 echo StorePrice::format($product->getPrice());

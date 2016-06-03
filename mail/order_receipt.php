@@ -1,6 +1,6 @@
 <?php
 defined('C5_EXECUTE') or die("Access Denied.");
-use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as Price;
+use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as StorePrice;
 
 $subject = t("Order Receipt");
 
@@ -95,8 +95,8 @@ ob_start();
                     ?>
                 </td>
                 <td><?= $item->getQty() ?></td>
-                <td><?= Price::format($item->getPricePaid()) ?></td>
-                <td><?= Price::format($item->getSubTotal()) ?></td>
+                <td><?= StorePrice::format($item->getPricePaid()) ?></td>
+                <td><?= StorePrice::format($item->getSubTotal()) ?></td>
             </tr>
             <?php
         }
@@ -108,9 +108,9 @@ ob_start();
 
 <?php
 $downloads = array();
-$orderItems = $order->getOrderItems();
-foreach ($orderItems as $item) {
+foreach ($items as $item) {
     $pObj = $item->getProductObject();
+
     if (is_object($pObj)) {
         if ($pObj->hasDigitalDownload()) {
             $fileObjs = $pObj->getDownloadFileObjects();
@@ -122,13 +122,11 @@ if (count($downloads) > 0) {
     ?>
     <div style="margin: 30px 0;">
         <p><strong><?= t("Your Downloads") ?></strong></p>
-
-        <p><?= t("Note: You must be logged in to download files") ?></p>
         <ul class="order-downloads">
             <?php
             foreach ($downloads as $name => $file) {
                 if (is_object($file)) {
-                    echo '<li><a href="' . $file->getDownloadURL() . '">' . $name . '</a></li>';
+                    echo '<li><a href="' . $file->getForceDownloadURL() . '">' . $name . '</a></li>';
                 }
             } ?>
         </ul>
@@ -137,8 +135,14 @@ if (count($downloads) > 0) {
 
 <p>
     <?php if ($order->isShippable()) { ?>
-        <strong><?= t("Shipping") ?>:</strong>  <?= Price::format($order->getShippingTotal()) ?><br>
+        <strong><?= t("Shipping") ?>:</strong>  <?= StorePrice::format($order->getShippingTotal()) ?><br>
         <strong><?= t("Shipping Method") ?>: </strong><?= $order->getShippingMethodName() ?> <br>
+
+        <?php
+        $shippingInstructions = $order->getShippingInstructions();
+        if ($shippingInstructions) { ?>
+            <strong><?= t("Delivery Instructions") ?>: </strong><?= $shippingInstructions ?> <br />
+        <?php } ?>
     <?php } ?>
 
     <?php $applieddiscounts = $order->getAppliedDiscounts();
@@ -156,10 +160,10 @@ if (count($downloads) > 0) {
 
     <?php foreach ($order->getTaxes() as $tax) { ?>
         <strong><?= $tax['label'] ?>
-            :</strong> <?= Price::format($tax['amount'] ? $tax['amount'] : $tax['amountIncluded']) ?><br>
+            :</strong> <?= StorePrice::format($tax['amount'] ? $tax['amount'] : $tax['amountIncluded']) ?><br>
     <?php } ?>
 
-    <strong class="text-large"><?= t("Total") ?>:</strong> <?= Price::format($order->getTotal()) ?><br><br>
+    <strong class="text-large"><?= t("Total") ?>:</strong> <?= StorePrice::format($order->getTotal()) ?><br><br>
     <strong><?= t("Payment Method") ?>: </strong><?= $order->getPaymentMethodName() ?>
 </p>
 </body>
@@ -206,8 +210,8 @@ if ($items) {
 }
 ?>
 
-<?= t("Tax") ?>: <?= Price::format($order->getTaxTotal()) ?>
-<?= t("Shipping") ?>:  <?= Price::format($order->getShippingTotal()) ?>
+<?= t("Tax") ?>: <?= StorePrice::format($order->getTaxTotal()) ?>
+<?= t("Shipping") ?>:  <?= StorePrice::format($order->getShippingTotal()) ?>
 <?php $applieddiscounts = $order->getAppliedDiscounts();
 if (!empty($applieddiscounts)) { ?>
     <?php
@@ -218,7 +222,7 @@ if (!empty($applieddiscounts)) { ?>
     echo (count($applieddiscounts) > 1 ? t('Discounts') : t('Discount')) . ' ' . implode(',', $discountsApplied);
     ?>
 <?php } ?>
-<?= t("Total") ?>: <?= Price::format($order->getTotal()) ?>
+<?= t("Total") ?>: <?= StorePrice::format($order->getTotal()) ?>
 
 <?php
 

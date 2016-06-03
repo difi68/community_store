@@ -21,6 +21,24 @@ class Checkout extends PageController
 {
     public function view()
     {
+        if ($this->post()) {
+            if ($this->post('action') == 'code') {
+
+                $codeerror = false;
+                $codesuccess = false;
+
+                if ($this->post('code')) {
+                    $codesuccess = StoreDiscountCode::storeCartCode($this->post('code'));
+                    $codeerror = !$codesuccess;
+                } else {
+                    StoreDiscountCode::clearCartCode();
+                }
+            }
+
+            $this->set('codeerror', $codeerror);
+            $this->set('codesuccess', $codesuccess);
+        }
+
         if (Config::get('community_store.shoppingDisabled') == 'all') {
             $this->redirect("/");
         }
@@ -109,6 +127,7 @@ class Checkout extends PageController
         $this->set('shippingtotal',$totals['shippingTotal']);
         $this->set('total',$totals['total']);
         $this->set('shippingEnabled', StoreCart::isShippable());
+        $this->set('shippingInstructions', StoreCart::getShippingInstructions());
 
         $this->requireAsset('javascript', 'jquery');
         $js = \Concrete\Package\CommunityStore\Controller::returnHeaderJS();
@@ -140,6 +159,7 @@ class Checkout extends PageController
     
     public function failed()
     {
+        $this->set('shippingInstructions', StoreCart::getShippingInstructions());
         $this->set('paymentErrors',Session::get('paymentErrors'));
         $this->set('activeShippingLabel', StoreShippingMethod::getActiveShippingLabel());
         $this->set('shippingTotal', StoreCalculator::getShippingTotal());

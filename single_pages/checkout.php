@@ -117,8 +117,8 @@ use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as Store
                                     <label for="store-checkout-billing-state"><?= t("State") ?></label>
                                     <?php $billingState = $customer->getValue("billing_address")->state_province; ?>
                                     <?= $form->select('store-checkout-billing-state', $states, $billingState ? $billingState : ""); ?>
-                                    <input type="hidden" id="store-checkout-saved-billing-state" value="<?= $billingState ?>">
                                 </div>
+                                <input type="hidden" id="store-checkout-saved-billing-state" value="<?= $billingState ?>">
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
@@ -154,7 +154,7 @@ use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as Store
 
                             <div class="col-sm-6">
                                 <label><?= t('Address'); ?></label>
-                                <p class="store-summary-address"><?= nl2br($customer->getValue("billing_address")); ?></p>
+                                <p class="store-summary-address"><?= nl2br($customer->getAddress("billing_address")); ?></p>
                             </div>
                         </div>
                     </div>
@@ -166,12 +166,10 @@ use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as Store
                         <div class="store-checkout-form-group-body">
                             <h2><?= t("Shipping Address") ?></h2>
                             <p>
-                                <div class="checkbox">
-                                    <label>
-                                        <input type="checkbox" id="ckbx-copy-billing">
-                                        <?= t("Same as Billing Address") ?>
-                                    </label>
-                                </div>
+                                <label>
+                                    <input type="checkbox" id="store-copy-billing" />
+                                    <?= t("Same as Billing Address") ?>
+                                </label>
                             </p>
                             <div class="row">
                                 <div class="col-md-6">
@@ -186,6 +184,8 @@ use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as Store
                                         <?= $form->text('store-checkout-shipping-last-name', $customer->getValue("shipping_last_name"), array("required" => "required")); ?>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="store-checkout-shipping-address-1"><?= t("Address 1") ?></label>
@@ -216,9 +216,8 @@ use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as Store
                                         <label for="store-checkout-shipping-state"><?= t("State") ?></label>
                                         <?php $shippingState = $customer->getValue("shipping_address")->state_province; ?>
                                         <?= $form->select('store-checkout-shipping-state', $states, $shippingState ? $shippingState : ""); ?>
-                                        <input type="hidden" id="store-checkout-saved-shipping-state"
-                                               value="<?= $shippingState ?>">
                                     </div>
+                                    <input type="hidden" id="store-checkout-saved-shipping-state" value="<?= $shippingState ?>">
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
@@ -246,7 +245,7 @@ use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as Store
                                 <div class="col-sm-6">
                                     <label><?= t('Address'); ?></label>
 
-                                    <p class="store-summary-address"><?= nl2br($customer->getValue("shipping_address")); ?></p>
+                                    <p class="store-summary-address"><?= nl2br($customer->getAddress("shipping_address")); ?></p>
                                 </div>
                             </div>
                         </div>
@@ -259,6 +258,13 @@ use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as Store
 
                             <div id="store-checkout-shipping-method-options" data-error-message="<?= h(t('Please select a shipping method'));?>">
                             </div>
+
+                            <?php if (Config::get('community_store.deliveryInstructions')) { ?>
+                            <div class="store-checkout-form-delivery-instructions form-group">
+                                <label><?= t('Delivery Instructions'); ?></label>
+                                <?= $form->textarea('store-checkout-shipping-instructions', h($shippingInstructions)); ?>
+                            </div>
+                            <?php } ?>
 
                             <div class="store-checkout-form-group-buttons">
                                 <a href="#" class="store-btn-previous-pane btn btn-default"><?= t("Previous") ?></a>
@@ -276,6 +282,9 @@ use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as Store
                                     <div class="summary-shipping-method">
                                         <?= $activeShippingLabel; ?> - <?= $shippingTotal > 0 ? StorePrice::format($shippingTotal) : t('No Charge');?>
                                     </div>
+                                    <p class="summary-shipping-instructions">
+                                        <?= h($shippingInstructions); ?>
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -351,62 +360,91 @@ use \Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as Store
         <!-- .checkout-form-shell -->
 
         <div class="store-checkout-cart-view col-md-4">
-            <h2><?= t("Your Cart") ?></h2>
-
-            <?php
-
-            if (\Illuminate\Filesystem\Filesystem::exists(DIR_BASE . '/application/elements/cart_list.php')) {
-                View::element('cart_list', array('cart' => $cart));
-            } else {
-                View::element('cart_list', array('cart' => $cart), 'community_store');
-            }
-            ?>
-
-            <ul class="store-checkout-totals-line-items list-group">
-                <li class="store-line-item store-sub-total list-group-item">
-                    <strong><?= t("Items Subtotal") ?>:</strong> <?= StorePrice::format($subtotal); ?>
-                    <?php if ($calculation == 'extract') {
-                        echo '<small class="text-muted">' . t("inc. taxes") . "</small>";
-                    } ?>
-                </li>
+            <div class="store-checkout-cart-contents">
+                <h2><?= t("Your Cart") ?></h2>
 
                 <?php
-                if ($taxtotal > 0) {
-                    foreach ($taxes as $tax) {
-                        if ($tax['taxamount'] > 0) { ?>
-                            <li class="store-line-item store-tax-item list-group-item"><strong><?= ($tax['name'] ? $tax['name'] : t("Tax")) ?>
-                                    :</strong> <span class="tax-amount"><?= StorePrice::format($tax['taxamount']); ?></span>
-                            </li>
-                        <?php }
-                    }
+
+                if (\Illuminate\Filesystem\Filesystem::exists(DIR_BASE . '/application/elements/cart_list.php')) {
+                    View::element('cart_list', array('cart' => $cart));
+                } else {
+                    View::element('cart_list', array('cart' => $cart), 'community_store');
                 }
                 ?>
 
-
-                <?php if ($shippingEnabled) { ?>
-                    <li class="store-line-item store-shipping list-group-item"><strong><?= t("Shipping") ?>:</strong> <span
-                            id="shipping-total" data-no-charge-label="<?=t('No Charge');?>"><?= $shippingtotal !== '' ? ($shippingtotal > 0 ? StorePrice::format($shippingtotal) : t('No Charge')) : t('to be determined'); ?></span></li>
-                <?php } ?>
-                <?php if (!empty($discounts)) { ?>
-                    <li class="store-line-item store-discounts list-group-item">
-                        <strong><?= (count($discounts) == 1 ? t('Discount Applied') : t('Discounts Applied')); ?>
-                            :</strong>
-                        <?php
-                        $discountstrings = array();
-                        foreach ($discounts as $discount) {
-                            $discountstrings[] = h($discount->getDisplay());
-                        }
-                        echo implode(', ', $discountstrings);
-                        ?>
+                <ul class="store-checkout-totals-line-items list-group">
+                    <li class="store-line-item store-sub-total list-group-item">
+                        <strong><?= t("Items Subtotal") ?>:</strong> <?= StorePrice::format($subtotal); ?>
+                        <?php if ($calculation == 'extract') {
+                            echo '<small class="text-muted">' . t("inc. taxes") . "</small>";
+                        } ?>
                     </li>
-                <?php } ?>
-                <?php if ($discountsWithCodesExist && !$hasCode) { ?>
-                    <li class="list-group-item"><a href="<?= \URL::to('/cart'); ?>"><?= t('Enter discount code'); ?></a></li>
-                <?php } ?>
-                <li class="store-line-item store-grand-total list-group-item"><strong><?= t("Grand Total") ?>:</strong> <span
-                        class="store-total-amount" data-total-cents="<?= StorePrice::formatInNumberOfCents($total); ?>"><?= StorePrice::format($total) ?></span></li>
-            </ul>
 
+                    <?php
+                    if ($taxtotal > 0) {
+                        foreach ($taxes as $tax) {
+                            if ($tax['taxamount'] > 0) { ?>
+                                <li class="store-line-item store-tax-item list-group-item"><strong><?= ($tax['name'] ? $tax['name'] : t("Tax")) ?>
+                                        :</strong> <span class="tax-amount"><?= StorePrice::format($tax['taxamount']); ?></span>
+                                </li>
+                            <?php }
+                        }
+                    }
+                    ?>
+
+
+                    <?php if ($shippingEnabled) { ?>
+                        <li class="store-line-item store-shipping list-group-item"><strong><?= t("Shipping") ?>:</strong> <span
+                                id="shipping-total" data-no-charge-label="<?=t('No Charge');?>"><?= $shippingtotal !== '' ? ($shippingtotal > 0 ? StorePrice::format($shippingtotal) : t('No Charge')) : t('to be determined'); ?></span></li>
+                    <?php } ?>
+                    <?php if (!empty($discounts)) { ?>
+                        <li class="store-line-item store-discounts list-group-item">
+                            <strong><?= (count($discounts) == 1 ? t('Discount Applied') : t('Discounts Applied')); ?>
+                                :</strong>
+                            <?php
+                            $discountstrings = array();
+                            foreach ($discounts as $discount) {
+                                $discountstrings[] = h($discount->getDisplay());
+                            }
+                            echo implode(', ', $discountstrings);
+                            ?>
+                        </li>
+                    <?php } ?>
+                    <?php if ($discountsWithCodesExist) { ?>
+                        <li class="list-group-item">
+                            <?php if ($codesuccess) { ?>
+                                <p><?= t('Discount has been applied');?></p>
+                            <?php } ?>
+
+                            <?php if ($codeerror) { ?>
+                                <p><?= t('Invalid code');?></p>
+                            <?php } ?>
+
+                            <a href="<?= \URL::to('/cart'); ?>" id="store-enter-discount-trigger"><?= t('Enter discount code'); ?></a>
+
+                            <form method="post" action="" class="form-inline store-checkout-code-form">
+                                <input type="text" class="form-control" name="code" placeholder="<?= t('Enter code'); ?>" />
+                                <input type="hidden" name="action" value="code" />
+                                <button type="submit" class="btn btn-default btn-cart-discount-apply"><?= t('Apply');?></button>
+                            </form>
+
+                             <script type="text/javascript">
+                                $(function () {
+                                    $("#store-enter-discount-trigger").click(function(e){
+                                        $('.store-checkout-code-form').show().find('.form-control').focus();
+                                        $(this).remove();
+                                        e.preventDefault();
+                                    });
+                                });
+                            </script>
+
+                        </li>
+
+                    <?php } ?>
+                    <li class="store-line-item store-grand-total list-group-item"><strong><?= t("Grand Total") ?>:</strong> <span
+                            class="store-total-amount" data-total-cents="<?= StorePrice::formatInNumberOfCents($total); ?>"><?= StorePrice::format($total) ?></span></li>
+                </ul>
+            </div>
         </div>
 
     </div>
