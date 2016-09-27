@@ -19,6 +19,7 @@ use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductLocation a
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductOption\ProductOption as StoreProductOption;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductOption\ProductOptionItem as StoreProductOptionItem;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductVariation\ProductVariation as StoreProductVariation;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductVariation\ProductVariationOptionItem as StoreProductVariationOptionItem;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductEvent as StoreProductEvent;
 use Concrete\Package\CommunityStore\Src\Attribute\Key\StoreProductKey;
 use Concrete\Package\CommunityStore\Src\Attribute\Value\StoreProductValue;
@@ -439,6 +440,9 @@ class Product
 
             $product->setPageDescription($data['pDesc']);
             $newproduct = false;
+            if ($data['pDateAdded_dt']) {
+                $product->setDateAdded(new \DateTime($data['pDateAdded_dt'] . ' ' . $data['pDateAdded_h'] . ':' . $data['pDateAdded_m']));
+            }
         } else {
             //else, we don't know it and we're adding a new product
             $product = new self();
@@ -811,6 +815,9 @@ class Product
     {
         return StoreProductVariation::getVariationsForProduct($this);
     }
+    public function getDateAdded(){
+        return $this->pDateAdded;
+    }
 
     public function save()
     {
@@ -935,6 +942,44 @@ class Product
         foreach($attributes as $handle=>$value) {
             $spk = StoreProductKey::getByHandle($handle);
             $spk->saveAttribute($newproduct, $value);
+        }
+
+
+        $variations = $this->getVariations();
+        $newvariations = array();
+
+        if(count($variations) > 0){
+            foreach ($variations as $variation) {
+                $cloneVariation = clone $variation;
+                $cloneVariation->setProductID($newproduct->getID());
+                $cloneVariation->save();
+                $newvariations[] = $cloneVariation;
+            }
+        }
+
+        $optionMap = array();
+
+        foreach($newproduct->getOptions() as $newoption) {
+            foreach($newoption->getOptionItems() as $optionItem) {
+                $optionMap[$optionItem->originalID] = $optionItem;
+            }
+        }
+
+        foreach($newvariations as $variation) {
+
+            foreach($variation->getOptions() as $option) {
+
+                $optionid = $option->getOption()->getID();
+
+                $variationoption = new StoreProductVariationOptionItem();
+                $variationoption->setOption($optionMap[$optionid]);
+                $variationoption->setVariation($variation);
+                $variationoption->save();
+
+
+                $option->setOption($optionMap[$optionid]);
+                $option->save();
+            }
         }
 
         // create product event and dispatch

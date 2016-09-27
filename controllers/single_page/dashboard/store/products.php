@@ -32,7 +32,7 @@ class Products extends DashboardPageController
         $products = new StoreProductList();
         $products->setItemsPerPage(20);
         $products->setGroupID($gID);
-        $products->activeOnly(false);
+        $products->setActiveOnly(false);
         $products->setShowOutOfStock(true);
 
 
@@ -403,6 +403,6 @@ class Products extends DashboardPageController
     }
     public function deletegroup($gID)
     {
-        StoreGroup::getByID($gID)->remove();
+        StoreGroup::getByID($gID)->delete();
     }
 }
