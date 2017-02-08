@@ -54,7 +54,7 @@ if ($cart) {
                         <?php $thumb = $product->getImageThumb(); ?>
                         <?php if ($thumb) { ?>
                         <td class="store-cart-list-thumb">
-                            <a href="<?= URL::page(Page::getByID($product->getPageID())) ?>">
+                            <a href="<?= URL::to(Page::getByID($product->getPageID())) ?>">
                                 <?=  $product->getImageThumb() ?>
                             </a>
                         </td>
@@ -62,38 +62,58 @@ if ($cart) {
                         <?php } else { ?>
                         <td class="store-cart-product-name" colspan="2">
                         <?php } ?>
-                        <a href="<?= URL::page(Page::getByID($product->getPageID())) ?>">
+                        <a href="<?= URL::to(Page::getByID($product->getPageID())) ?>">
                             <?= $product->getName() ?>
                         </a>
 
                         <?php if ($cartItem['productAttributes']) { ?>
                             <div class="store-cart-list-item-attributes">
                                 <?php foreach ($cartItem['productAttributes'] as $groupID => $valID) {
-                                    $groupID = str_replace("po", "", $groupID);
+
+                                    if (substr($groupID, 0, 2) == 'po') {
+                                        $groupID = str_replace("po", "", $groupID);
+                                        $optionvalue = StoreProductOptionItem::getByID($valID);
+
+                                        if ($optionvalue) {
+                                            $optionvalue = $optionvalue->getName();
+                                        }
+                                    } elseif (substr($groupID, 0, 2) == 'pt')  {
+                                        $groupID = str_replace("pt", "", $groupID);
+                                        $optionvalue = $valID;
+                                    } elseif (substr($groupID, 0, 2) == 'pa')  {
+                                        $groupID = str_replace("pa", "", $groupID);
+                                        $optionvalue = $valID;
+                                    } elseif (substr($groupID, 0, 2) == 'ph')  {
+                                        $groupID = str_replace("ph", "", $groupID);
+                                        $optionvalue = $valID;
+                                    }
+
                                     $optiongroup = StoreProductOption::getByID($groupID);
-                                    $optionvalue = StoreProductOptionItem::getByID($valID);
 
                                     ?>
+                                    <?php if ($optionvalue) { ?>
                                     <div class="store-cart-list-item-attribute">
-                                        <span
-                                            class="store-cart-list-item-attribute-label"><?= ($optiongroup ? $optiongroup->getName() : '') ?>
-                                            :</span>
-                                        <span
-                                            class="store-cart-list-item-attribute-value"><?= ($optionvalue ? $optionvalue->getName() : '') ?></span>
+                                        <span class="store-cart-list-item-attribute-label"><?= ($optiongroup ? h($optiongroup->getName()) : '') ?>:</span>
+                                        <span class="store-cart-list-item-attribute-value"><?= ($optionvalue ? h($optionvalue) : '') ?></span>
                                     </div>
+                                    <?php } ?>
                                 <?php } ?>
                             </div>
                         <?php } ?>
                         </td>
                         <td class="store-cart-item-price">
-                            <?php
-                            $salePrice = $product->getSalePrice();
-                            if (isset($salePrice) && $salePrice != "") {
-                                echo '<span class="sale-price">' . StorePrice::format($salePrice) . '</span>';
-                            } else {
-                                echo StorePrice::format($product->getPrice());
-                            }
-                            ?>
+                            <?php if (isset($cartItem['product']['customerPrice'])) { ?>
+                                <?=StorePrice::format($cartItem['product']['customerPrice'])?>
+                            <?php } else {  ?>
+                                <?php
+                                $salePrice = $product->getSalePrice();
+                                if (isset($salePrice) && $salePrice != "") {
+                                    echo '<span class="sale-price">' . StorePrice::format($salePrice) . '</span>';
+                                } else {
+                                    echo StorePrice::format($product->getActivePrice());
+                                }
+                                ?>
+                            <?php } ?>
                         </td>
                         <td class="store-cart-product-qty text-right">
                             <?php if ($product->allowQuantity()) { ?>
@@ -106,7 +126,7 @@ if ($cart) {
                                 1
                             <?php } ?>
 
-                            <a name="action" value="remove" data-instance="<?= $k ?>"
+                            <a name="action" data-instance="<?= $k ?>"
                                class="store-btn-cart-list-remove btn-xs btn btn-danger" type="submit"><i
                                     class="fa fa-remove"></i><?php //echo t("Remove")
                                 ?></a>

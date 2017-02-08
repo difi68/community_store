@@ -62,7 +62,7 @@ class FlatRateShippingMethod extends ShippingMethodTypeMethod
 
     public function setBaseRate($baseRate)
     {
-        $this->baseRate = $baseRate;
+        $this->baseRate = $baseRate > 0 ? $baseRate : 0;
     }
     public function setRateType($rateType)
     {
@@ -70,27 +70,27 @@ class FlatRateShippingMethod extends ShippingMethodTypeMethod
     }
     public function setPerItemRate($perItemRate)
     {
-        $this->perItemRate = $perItemRate;
+        $this->perItemRate = $perItemRate > 0 ? $perItemRate : null;
     }
     public function setPerWeightRate($perWeightRate)
     {
-        $this->perWeightRate = $perWeightRate;
+        $this->perWeightRate = $perWeightRate > 0 ? $perWeightRate : null;
     }
     public function setMinimumAmount($minAmount)
     {
-        $this->minimumAmount = $minAmount;
+        $this->minimumAmount = $minAmount > 0 ? $minAmount : 0;
     }
     public function setMaximumAmount($maxAmount)
     {
-        $this->maximumAmount = $maxAmount;
+        $this->maximumAmount = $maxAmount > 0 ? $maxAmount : 0;
     }
     public function setMinimumWeight($minWeight)
     {
-        $this->minimumWeight = $minWeight;
+        $this->minimumWeight = $minWeight > 0 ? $minWeight : 0;
     }
     public function setMaximumWeight($maxWeight)
     {
-        $this->maximumWeight = $maxWeight;
+        $this->maximumWeight = $maxWeight > 0 ? $maxWeight : 0;
     }
     public function setCountries($countries)
     {
@@ -172,7 +172,7 @@ class FlatRateShippingMethod extends ShippingMethodTypeMethod
         }
         $sm->setCountriesSelected($countriesSelected);
 
-        $em = \Database::connection()->getEntityManager();
+        $em = \ORM::entityManager();
         $em->persist($sm);
         $em->flush();
 
@@ -299,8 +299,13 @@ class FlatRateShippingMethod extends ShippingMethodTypeMethod
         $totalWeight = 0;
         foreach ($shippableItems as $item) {
             $product = StoreProduct::getByID($item['product']['pID']);
+
+            if ($item['product']['variation']) {
+                $product->setVariation($item['product']['variation']);
+            }
+
             if ($product->isShippable()) {
-                $totalProductWeight = $item['product']['qty'] * $product->getWeight();
+                $totalProductWeight = $product->getWeight() * $item['product']['qty'];
                 $totalWeight = $totalWeight + $totalProductWeight;
             }
         }

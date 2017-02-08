@@ -59,16 +59,15 @@ class Checkout extends PageController
 
         $allcountries = Core::make('helper/lists/countries')->getCountries();
 
-        $db = \Database::connection();
+        $db = $this->app->make('database')->connection();
 
         $ak = UserAttributeKey::getByHandle('billing_address');
-        $aktype = $ak->getAttributeKeyType();
 
-        if (method_exists($aktype, 'getDefaultCountry')) {
-            $defaultBillingCountry = $aktype->getDefaultCountry();
-            $hasCustomerBillingCountries = $aktype->hasCustomCountries();
-            $availableBillingCountries = $aktype->getCustomCountries();
-
+        if (version_compare(\Config::get('concrete.version'), '8.0', '>=')) {
+            $keysettings =  $ak->getController()->getAttributeKeySettings();
+            $defaultBillingCountry = $keysettings->getDefaultCountry();
+            $hasCustomerBillingCountries = $keysettings->hasCustomCountries();
+            $availableBillingCountries = $keysettings->getCustomCountries();
         } else {
             $row = $db->GetRow(
                 'select akHasCustomCountries, akDefaultCountry from atAddressSettings where akID = ?',
@@ -94,13 +93,12 @@ class Checkout extends PageController
         }
 
         $ak = UserAttributeKey::getByHandle('shipping_address');
-        $aktype = $ak->getAttributeKeyType();
-
-        if (method_exists($aktype, 'getDefaultCountry')) {
-            $defaultShippingCountry = $aktype->getDefaultCountry();
-            $hasCustomerShippingCountries = $aktype->hasCustomCountries();
-            $availableShippingCountries = $aktype->getCustomCountries();
-
+        
+        if (version_compare(\Config::get('concrete.version'), '8.0', '>=')) {
+            $keysettings =  $ak->getController()->getAttributeKeySettings();
+            $defaultShippingCountry = $keysettings->getDefaultCountry();
+            $hasCustomerShippingCountries = $keysettings->hasCustomCountries();
+            $availableShippingCountries = $keysettings->getCustomCountries();
         } else {
             $row = $db->GetRow(
                 'select akHasCustomCountries, akDefaultCountry from atAddressSettings where akID = ?',
@@ -217,7 +215,7 @@ class Checkout extends PageController
         }
 
         if($pm->getMethodController()->isExternal()){
-            $order = StoreOrder::add($data,$pm,null,'incomplete');
+            $order = StoreOrder::add($pm,null,'incomplete');
             Session::set('orderID',$order->getOrderID());
             $this->redirect('/checkout/external');
         } else {
@@ -228,7 +226,7 @@ class Checkout extends PageController
                 $this->redirect("/checkout/failed#payment");
             } else {
                 $transactionReference = $payment['transactionReference'];
-                $order = StoreOrder::add($data,$pm,$transactionReference);
+                $order = StoreOrder::add($pm,$transactionReference);
                 $this->redirect('/checkout/complete');
             }
         }

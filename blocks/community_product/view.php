@@ -1,10 +1,12 @@
 <?php
 defined('C5_EXECUTE') or die(_("Access Denied."));
+$defaultimagewidth = 720;
+$defaultimageheight = 720;
 
-if (is_object($product)) {
+if (is_object($product) && $product->isActive()) {
     ?>
 
-    <form class="store-product store-product-block" id="store-form-add-to-cart-<?= $product->getID() ?>" itemscope itemtype="http://schema.org/Product">
+    <form class="store-product store-product-block" id="store-form-add-to-cart-<?= $product->getID() ?>" data-product-id="<?= $product->getID() ?>" itemscope itemtype="http://schema.org/Product">
         <div class="row">
             <?php if ($showImage){ ?>
             <div class="store-product-details col-md-6">
@@ -16,15 +18,15 @@ if (is_object($product)) {
                         <meta itemprop="sku" content="<?= $product->getSKU() ?>" />
                     <?php } ?>
 
-                    <?php if ($showProductPrice) { ?>
+                    <?php if ($showProductPrice && !$product->allowCustomerPrice()) { ?>
                         <p class="store-product-price" itemprop="offers" itemscope itemtype="http://schema.org/Offer">
                             <meta itemprop="priceCurrency" content="<?= Config::get('community_store.currency');?>" />
                         <?php
                         $salePrice = $product->getSalePrice();
                         if (isset($salePrice) && $salePrice != "") {
-                            echo '<span class="sale-price">' . t("On Sale: ") . $product->getFormattedSalePrice() . '</span>';
+                            echo '<span class="store-sale-price">' . t("On Sale: ") . $product->getFormattedSalePrice() . '</span>';
                             echo '&nbsp;'.t('was').'&nbsp;';
-                            echo '<span class="original-price">' . $product->getFormattedOriginalPrice() . '</span>';
+                            echo '<span class="store-original-price">' . $product->getFormattedOriginalPrice() . '</span>';
                             echo '<meta itemprop="price" content="' . $product->getSalePrice() .'" />';
                         } else {
                             echo $product->getFormattedPrice();
@@ -32,6 +34,45 @@ if (is_object($product)) {
                         }
                         ?>
                         </p>
+                    <?php } ?>
+
+                    <?php if ($product->allowCustomerPrice()) { ?>
+                        <div class="store-product-customer-price-entry form-group">
+                            <?php
+                            $pricesuggestions = $product->getPriceSuggestionsArray();
+                            if (!empty($pricesuggestions)) { ?>
+                                <p class="store-product-price-suggestions"><?php
+                                foreach($pricesuggestions as $suggestion) { ?>
+                                    <a href="#" class="store-price-suggestion btn btn-default btn-sm" data-add-type="list" data-suggestion-value="<?= $suggestion; ?>"><?= Config::get('community_store.symbol') . $suggestion;?></a>
+                                <?php } ?>
+                                </p>
+                                <label for="customerPrice" class="store-product-customer-price-label"><?= t('Enter Other Amount') ?></label>
+                            <?php } else { ?>
+                                <label for="customerPrice" class="store-product-customer-price-label"><?= t('Amount') ?></label>
+                            <?php } ?>
+                            <?php $min = $product->getPriceMinimum(); ?>
+                            <?php $max = $product->getPriceMaximum(); ?>
+                            <div class="input-group col-md-6 col-sm-6 col-xs-6">
+                                <div class="input-group-addon"><?= Config::get('community_store.symbol');?></div>
+                                <input type="number" <?= $min ? 'min="'.$min.'"' : ''; ?>  <?= $max ? 'max="'.$max.'"' : ''; ?>class="store-product-customer-price-entry-field form-control" value="<?= $product->getPrice(); ?>" name="customerPrice" />
+                            </div>
+                            <?php if ($min >=0 || $max > 0) { ?>
+                                <span class="store-min-max help-block">
+                                    <?php
+                                    if (!is_null($min)) {
+                                        echo t('minimum') . ' ' . Config::get('community_store.symbol') . $min;
+                                    }
+
+                                    if (!is_null($max)) {
+                                        if ($min >= 0) {
+                                            echo ', ';
+                                        }
+                                        echo t('maximum') . ' ' . Config::get('community_store.symbol') . $max;
+                                    }
+                                    ?>
+                                    </span>
+                            <?php } ?>
+                        </div>
                     <?php } ?>
 
                     <meta itemprop="description" content="<?= strip_tags($product->getDesc()); ?>" />
@@ -88,10 +129,18 @@ if (is_object($product)) {
 
                         foreach ($product->getOptions() as $option) {
                             $optionItems = $option->getOptionItems();
+                            $optionType = $option->getType();
+                            $required = $option->getRequired();
 
+                            $requiredAttr = '';
+
+                            if ($required) {
+                                $requiredAttr = ' required="required" placeholder="'.t('Required').'" ';
+                            }
                             ?>
-                            <?php if (!empty($optionItems)) { ?>
-                                <div class="store-product-option-group form-group">
+
+                            <?php if (!$optionType || $optionType == 'select') { ?>
+                                <div class="store-product-option-group form-group <?= $option->getHandle() ?>">
                                     <label class="store-product-option-group-label"><?= $option->getName() ?></label>
                                     <select class="store-product-option form-control" name="po<?= $option->getID() ?>">
                                         <?php
@@ -104,8 +153,20 @@ if (is_object($product)) {
                                         <?php } ?>
                                     </select>
                                 </div>
-                            <?php }
-                        } ?>
+                            <?php } elseif ($optionType == 'text') { ?>
+                                <div class="store-product-option-group form-group <?= $option->getHandle() ?>">
+                                    <label class="store-product-option-group-label"><?= $option->getName() ?></label>
+                                    <input class="store-product-option-entry form-control" <?= $requiredAttr; ?> name="pt<?= $option->getID() ?>" />
+                                </div>
+                            <?php } elseif ($optionType == 'textarea') { ?>
+                                <div class="store-product-option-group form-group <?= $option->getHandle() ?>">
+                                    <label class="store-product-option-group-label"><?= $option->getName() ?></label>
+                                    <textarea class="store-product-option-entry form-control" <?= $requiredAttr; ?> name="pa<?= $option->getID() ?>"></textarea>
+                                </div>
+                            <?php } elseif ($optionType == 'hidden') { ?>
+                                    <input type="hidden" class="store-product-option-hidden <?= $option->getHandle() ?>" name="ph<?= $option->getID() ?>" />
+                            <?php } ?>
+                        <?php } ?>
                     </div>
 
                     <?php if ($showCartButton) { ?>
@@ -124,15 +185,15 @@ if (is_object($product)) {
 
                 <?php if ($showImage) { ?>
                     <div class="store-product-image col-md-6">
-                        <p>
+                        <div>&nbsp;</div>
                         <?php
                         $imgObj = $product->getImageObj();
                         if (is_object($imgObj)) {
-                            $thumb = Core::make('helper/image')->getThumbnail($imgObj, 600, 600, true);
+                            $thumb = Core::make('helper/image')->getThumbnail($imgObj, $defaultimagewidth, $defaultimageheight, true);
                             ?>
-                            <div class="store-product-primary-image">
+                            <div class="store-product-primary-image ">
                                 <a itemprop="image" href="<?= $imgObj->getRelativePath() ?>"
-                                   title="<?= h($product->getName()); ?>" class="store-product-thumb">
+                                   title="<?= h($product->getName()); ?>" class="store-product-thumb text-center center-block">
                                     <img src="<?= $thumb->src ?>">
                                 </a>
                             </div>
@@ -141,21 +202,24 @@ if (is_object($product)) {
                         <?php
                         $images = $product->getImagesObjects();
                         if (count($images) > 0) {
-                            echo '<div class="store-product-additional-images">';
+                            $loop = 1;
+                            echo '<div class="store-product-additional-images clearfix no-gutter">';
+
                             foreach ($images as $secondaryimage) {
                                 if (is_object($secondaryimage)) {
-                                    $thumb = Core::make('helper/image')->getThumbnail($secondaryimage, 300, 300, true);
+                                    $thumb = Core::make('helper/image')->getThumbnail($secondaryimage, $defaultimagewidth, $defaultimageheight, true);
                                     ?>
-                                    <a href="<?= $secondaryimage->getRelativePath() ?>"
-                                       title="<?= h($product->getName()); ?>" class="store-product-thumb"><img
-                                            src="<?= $thumb->src ?>"></a>
-
+                                    <div class="store-product-additional-image col-md-6 col-sm-6"><a href="<?= $secondaryimage->getRelativePath() ?>" title="<?= h($product->getName()); ?>" class="store-product-thumb text-center center-block"><img src="<?= $thumb->src ?>" /></a></div>
                                 <?php }
+
+                                if ($loop > 0 && $loop % 2 == 0 && count($images) > $loop) {
+                                    echo '</div><div class="clearfix no-gutter">';
+                                }
+                                $loop++;
                             }
                             echo '</div>';
                         }
                         ?>
-                        </p>
                     </div>
                 <?php } ?>
             </div>
@@ -181,13 +245,12 @@ if (is_object($product)) {
             $varationData = array();
             foreach($variationLookup as $key=>$variation) {
                 $product->setVariation($variation);
-
-                $imgObj = $variation->getVariationImageObj();
+                $imgObj = $product->getImageObj();
 
                 $thumb = false;
 
                 if ($imgObj) {
-                    $thumb = Core::make('helper/image')->getThumbnail($imgObj,600,800,true);
+                    $thumb = Core::make('helper/image')->getThumbnail($imgObj, $defaultimagewidth, $defaultimageheight,true);
                 }
 
                 $varationData[$key] = array(
@@ -195,7 +258,7 @@ if (is_object($product)) {
                 'saleprice'=>$product->getFormattedSalePrice(),
                 'available'=>($variation->isSellable()),
                 'imageThumb'=>$thumb ? $thumb->src : '',
-                'image'=>$imgObj ? $imgObj->getRelativePath() : ''
+                'image'=> $imgObj ? $imgObj->getRelativePath() : ''
 
                 );
             } ?>
@@ -206,9 +269,9 @@ if (is_object($product)) {
 
                 $('#product-options-<?= $bID; ?> select, #product-options-<?= $bID; ?> input:checked').each(function () {
                     ar.push($(this).val());
-                })
+                });
 
-                ar.sort();
+                ar.sort(communityStore.sortNumber);
                 var pdb = $(this).closest('.store-product-block');
 
                 if (variationdata[ar.join('_')]['saleprice']) {

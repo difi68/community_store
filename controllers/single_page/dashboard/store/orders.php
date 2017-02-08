@@ -33,6 +33,7 @@ class Orders extends DashboardPageController
         $this->set('pagination',$pagination);
         $this->set('paginator', $paginator);
         $this->set('orderStatuses', StoreOrderStatus::getList());
+        $this->set('status', $status);
         $this->requireAsset('css', 'communityStoreDashboard');
         $this->requireAsset('javascript', 'communityStoreFunctions');
         $this->set('statuses', StoreOrderStatus::getAll());
@@ -84,7 +85,7 @@ class Orders extends DashboardPageController
 
         $user = new \User();
 
-        $order->setPaid(new \DateTime());
+        $order->completePayment();
         $order->setPaidByUID($user->getUserID());
         $order->save();
 
@@ -101,9 +102,6 @@ class Orders extends DashboardPageController
 
         $this->redirect('/dashboard/store/orders/order',$oID);
     }
-
-
-
 
     public function markrefunded($oID)
     {
@@ -141,14 +139,22 @@ class Orders extends DashboardPageController
         $this->redirect('/dashboard/store/orders/order',$oID);
     }
 
-
-
     public function reversecancel($oID)
     {
         $order = StoreOrder::getByID($oID);
         $order->setCancelled(null);
         $order->setCancelledByUID(null);
         $order->save();
+
+        $this->redirect('/dashboard/store/orders/order',$oID);
+    }
+
+    public function resendinvoice($oID) {
+        $order = StoreOrder::getByID($oID);
+
+        if ($order){
+           $order->sendOrderReceipt($this->post('email'));
+        }
 
         $this->redirect('/dashboard/store/orders/order',$oID);
     }

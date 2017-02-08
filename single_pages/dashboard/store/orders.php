@@ -138,7 +138,7 @@ use \Concrete\Package\CommunityStore\Src\Attribute\Key\StoreOrderKey as StoreOrd
                                 foreach($options as $option){
                                     echo "<li>";
                                     echo "<strong>".$option['oioKey'].": </strong>";
-                                    echo $option['oioValue'];
+                                    echo ($option['oioValue'] ? $option['oioValue'] : '<em>' .t('None') . '</em>');
                                     echo "</li>";
                                 }
                                 echo "</ul>";
@@ -228,12 +228,29 @@ use \Concrete\Package\CommunityStore\Src\Attribute\Key\StoreOrderKey as StoreOrd
             <strong><?= t("Shipping Method") ?>: </strong><?= $order->getShippingMethodName() ?>
         </p>
 
+
+
+        <?php
+        $trackingURL = $order->getTrackingURL();
+        $trackingCode = $order->getTrackingCode();
+        $carrier = $order->getCarrier();
+
+        if ($carrier) { ?>
+            <p><strong><?= t("Carrier") ?>: </strong><?= $carrier ?></p>
+        <?php }
+
+        if ($trackingCode) { ?>
+            <p><strong><?= t("Tracking Code") ?>: </strong><?= $trackingCode ?> </p>
+        <?php }
+
+        if ($trackingURL) { ?>
+        <p><a target="_blank" href="<?= $trackingURL; ?>"><?= t('View shipment tracking');?></a></p>
+        <?php } ?>
+
         <?php
         $shippingInstructions = $order->getShippingInstructions();
         if ($shippingInstructions) { ?>
-            <p>
-                <strong><?= t("Delivery Instructions") ?>: </strong><?= $shippingInstructions ?>
-            </p>
+            <p><strong><?= t("Delivery Instructions") ?>: </strong><?= $shippingInstructions ?></p>
         <?php } ?>
 
     <?php } ?>
@@ -306,8 +323,6 @@ use \Concrete\Package\CommunityStore\Src\Attribute\Key\StoreOrderKey as StoreOrd
         <div class="col-sm-6">
             <fieldset>
             <legend><?= t("Payment Status")?></legend>
-
-
 
             <?php  if($order->getTotal() == 0) { ?>
             <p><?= t('Free Order');?></p>
@@ -393,7 +408,7 @@ use \Concrete\Package\CommunityStore\Src\Attribute\Key\StoreOrderKey as StoreOrd
                     <form action="<?=URL::to("/dashboard/store/orders/markpaid",$order->getOrderID())?>" method="post">
                        <div class="form-group">
                        <label for="transactionReference"><?= t('Transaction Reference'); ?></label>
-                       <input type="text" class="form-control ccm-input-text" name="transactionReference" />
+                       <input type="text" class="form-control ccm-input-text" id="transactionReference" name="transactionReference" />
                        </div>
                         <input type="submit" class="btn btn-default" value="<?= t("Mark Paid")?>">
                     </form>
@@ -401,7 +416,7 @@ use \Concrete\Package\CommunityStore\Src\Attribute\Key\StoreOrderKey as StoreOrd
                         <form action="<?=URL::to("/dashboard/store/orders/markrefunded",$order->getOrderID())?>" method="post">
                            <div class="form-group">
                            <label for="oRefundReason"><?= t('Refund Reason'); ?></label>
-                           <input type="text" class="form-control ccm-input-text" name="oRefundReason" />
+                           <input type="text" class="form-control ccm-input-text" id="oRefundReason" name="oRefundReason" />
                            </div>
                             <input type="submit" class="btn btn-default" value="<?= t("Mark Refunded")?>">
                         </form>
@@ -413,12 +428,25 @@ use \Concrete\Package\CommunityStore\Src\Attribute\Key\StoreOrderKey as StoreOrd
 
              <?php } ?>
 
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        <h4 class="panel-title"><?= t("Resend Invoice Email")?></h4>
+                    </div>
+                    <div class="panel-body">
+                        <form action="<?=URL::to("/dashboard/store/orders/resendinvoice",$order->getOrderID())?>" method="post">
+                            <div class="form-group">
+                                <label for="email"><?= t('Email'); ?></label>
+                                <input type="text" class="form-control ccm-input-text" id="email" name="email" value="<?php echo $order->getAttribute('email');?>" />
+                            </div>
+                            <input type="submit" class="btn btn-default" value="<?= t("Resend Invoice")?>">
+                        </form>
+                    </div>
+                </div>
+
              </fieldset>
         </div>
 
     </div>
-    </fieldset>
-
 
 
      <?php if (!$order->getCancelled()) { ?>
@@ -455,9 +483,10 @@ use \Concrete\Package\CommunityStore\Src\Attribute\Key\StoreOrderKey as StoreOrd
         <div class="ccm-search-fields-row">
             <?php if($statuses){?>
                 <ul id="group-filters" class="nav nav-pills">
-                    <li><a href="<?= \URL::to('/dashboard/store/orders/')?>"><?= t('All Statuses')?></a></li>
-                    <?php foreach($statuses as $status){ ?>
-                        <li><a href="<?= \URL::to('/dashboard/store/orders/', $status->getHandle())?>"><?= t($status->getName());?></a></li>
+                    <li <?= (!$status ? 'class="active"' : ''); ?>><a href="<?= \URL::to('/dashboard/store/orders/')?>"><?= t('All Statuses')?></a></li>
+
+                    <?php foreach($statuses as $statusoption){ ?>
+                        <li <?= ($status == $statusoption->getHandle() ? 'class="active"' : ''); ?>><a href="<?= \URL::to('/dashboard/store/orders/', $statusoption->getHandle())?>"><?= t($statusoption->getName());?></a></li>
                     <?php } ?>
                 </ul>
             <?php } ?>
@@ -471,21 +500,24 @@ use \Concrete\Package\CommunityStore\Src\Attribute\Key\StoreOrderKey as StoreOrd
                     <?= $form->search('keywords', $searchRequest['keywords'], array('placeholder' => t('Search Orders')))?>
                 </div>
             </div>
-            <button type="submit" class="btn btn-primary pull-right"><?= t('Search')?></button>
+            <button type="submit" class="btn btn-default"><?= t('Search')?></button>
 
         </div>
 
     </form>
 
+    <?php if (!empty($orderList)) { ?>
     <table class="ccm-search-results-table">
         <thead>
-            <th><a><?= t("Order %s","#")?></a></th>
-            <th><a><?= t("Customer Name")?></a></th>
-            <th><a><?= t("Order Date")?></a></th>
-            <th><a><?= t("Total")?></a></th>
-            <th><a><?= t("Payment")?></a></th>
-            <th><a><?= t("Fulfilment")?></a></th>
-            <th><a><?= t("View")?></a></th>
+            <tr>
+                <th><a><?= t("Order %s","#")?></a></th>
+                <th><a><?= t("Customer Name")?></a></th>
+                <th><a><?= t("Order Date")?></a></th>
+                <th><a><?= t("Total")?></a></th>
+                <th><a><?= t("Payment")?></a></th>
+                <th><a><?= t("Fulfilment")?></a></th>
+                <th><a><?= t("View")?></a></th>
+            </tr>
         </thead>
         <tbody>
             <?php
@@ -495,8 +527,8 @@ use \Concrete\Package\CommunityStore\Src\Attribute\Key\StoreOrderKey as StoreOrd
                 $canstart = '';
                 $canend = '';
                 if ($cancelled) {
-                    $canstart = '<strike>';
-                    $canend = '</strike>';
+                    $canstart = '<del>';
+                    $canend = '</del>';
                 }
             ?>
                 <tr class="danger">
@@ -544,7 +576,12 @@ use \Concrete\Package\CommunityStore\Src\Attribute\Key\StoreOrderKey as StoreOrd
             <?php } ?>
         </tbody>
     </table>
+    <?php } ?>
 </div>
+
+<?php if (empty($orderList)) { ?>
+<br /><p class="alert alert-info"><?= t('No Orders Found');?></p>
+<?php } ?>
 
 <?php if ($paginator->getTotalPages() > 1) { ?>
     <?= $pagination ?>

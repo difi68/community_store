@@ -1,8 +1,9 @@
 <?php
 defined('C5_EXECUTE') or die(_("Access Denied."));
 use \Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductVariation\ProductVariation as StoreProductVariation;
-if($products){
+$c = Page::getCurrentPage();
 
+if($products){
     $columnClass = 'col-md-12';
 
     if ($productsPerRow == 2) {
@@ -16,6 +17,37 @@ if($products){
     if ($productsPerRow == 4) {
         $columnClass = 'col-md-3';
     }
+    ?>
+
+
+    <?php if ($showSortOption) { ?>
+    <div class="store-product-list-sort row">
+        <div class="col-md-12 form-inline text-right pull-right">
+            <div class="form-group">
+                <?= $form->label('sort' . $bID,  t('Sort by')); ?>
+                <?= $form->select('sort' . $bID,
+                    array(
+                    '0' => '',
+                    'price_asc' => t('price, lowest to highest'),
+                    'price_desc' => t('price, highest to lowest'),
+                    ));
+                ?>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+    $(function () {
+        $('#sort<?= $bID;?>').change(function(){
+            var sortstring = '<?php echo \Core::make('helper/url')->setVariable(array('sort'. $bID=>'%sort%'));?>';
+            window.location.href=  sortstring.replace('%sort%', $(this).val());
+        });
+    });
+    </script>
+    <?php } ?>
+
+
+    <?php
 
     echo '<div class="store-product-list row store-product-list-per-row-'. $productsPerRow .'">';
 
@@ -39,15 +71,17 @@ if($products){
         }
 
         //this is done so we can get a type of active class if there's a product list on the product page
-        if(Page::getCurrentPage()->getCollectionID()==$product->getPageID()){
+        if($c->getCollectionID()==$product->getPageID()){
             $activeclass =  'on-product-page';
         }
 
     ?>
     
         <div class="store-product-list-item <?= $columnClass; ?> <?= $activeclass; ?>">
-            <form   id="store-form-add-to-cart-list-<?= $product->getID()?>">
+            <form   id="store-form-add-to-cart-list-<?= $product->getID()?>" data-product-id="<?= $product->getID() ?>">
+		<?php if ($showName) { ?>
                 <h2 class="store-product-list-name"><?= $product->getName()?></h2>
+		<?php } ?>
                 <?php 
                     $imgObj = $product->getImageObj();
                     if(is_object($imgObj)){
@@ -73,14 +107,55 @@ if($products){
                     <?php
                         $salePrice = $product->getSalePrice();
                         if(isset($salePrice) && $salePrice != ""){
-                            echo '<span class="sale-price">'.$product->getFormattedSalePrice().'</span>';
-                            echo ' ' . t('was') . ' ' . '<span class="original-price">'.$product->getFormattedOriginalPrice().'</span>';
+                            echo '<span class="store-sale-price">'.$product->getFormattedSalePrice().'</span>';
+                            echo ' ' . t('was') . ' ' . '<span class="store-original-price">'.$product->getFormattedOriginalPrice().'</span>';
                         } else {
                             echo $product->getFormattedPrice();
                         }
                     ?>
                 </p>
                 <?php } ?>
+
+                <?php if ($product->allowCustomerPrice()) { ?>
+                    <div class="store-product-customer-price-entry form-group">
+                        <?php
+                        $pricesuggestions = $product->getPriceSuggestionsArray();
+                        if (!empty($pricesuggestions)) { ?>
+                            <p class="store-product-price-suggestions"><?php
+                                foreach($pricesuggestions as $suggestion) { ?>
+                                    <a href="#" class="store-price-suggestion btn btn-default btn-sm" data-suggestion-value="<?= $suggestion; ?>" data-add-type="list"><?= Config::get('community_store.symbol') . $suggestion;?></a>
+                                <?php } ?>
+                            </p>
+                            <label for="customerPrice" class="store-product-customer-price-label"><?= t('Enter Other Amount') ?></label>
+                        <?php } else { ?>
+                            <label for="customerPrice" class="store-product-customer-price-label"><?= t('Amount') ?></label>
+                        <?php } ?>
+                        <?php $min = $product->getPriceMinimum(); ?>
+                        <?php $max = $product->getPriceMaximum(); ?>
+                        <div class="input-group col-md-6 col-sm-6 col-xs-6">
+                            <div class="input-group-addon"><?= Config::get('community_store.symbol');?></div>
+                            <input type="number" <?= $min ? 'min="'.$min.'"' : ''; ?>  <?= $max ? 'max="'.$max.'"' : ''; ?>class="store-product-customer-price-entry-field form-control" value="<?= $product->getPrice(); ?>" name="customerPrice" />
+                        </div>
+                        <?php if ($min >=0 || $max > 0) { ?>
+                            <span class="store-min-max help-block">
+                                    <?php
+                                    if (!is_null($min)) {
+                                        echo t('minimum') . ' ' . Config::get('community_store.symbol') . $min;
+                                    }
+
+                                    if (!is_null($max)) {
+                                        if ($min >= 0) {
+                                            echo ', ';
+                                        }
+                                        echo t('maximum') . ' ' . Config::get('community_store.symbol') . $max;
+                                    }
+                                    ?>
+                                    </span>
+                        <?php } ?>
+                    </div>
+                <?php } ?>
+
+
                 <?php if($showDescription){ ?>
                 <div class="store-product-list-description"><?= $product->getDesc()?></div>
                 <?php } ?>
@@ -95,29 +170,51 @@ if($products){
                         <input type="number" name="quantity" class="store-product-qty form-control" value="1" min="1" step="1">
                     </div>
                 <?php } else { ?>
-                    <input type="hidden" name="quantity" class="store-product-qty" value="1">
+                        <input type="hidden" name="quantity" class="store-product-qty" value="1">
                 <?php } ?>
 
                 <?php
-                foreach($options as $option) {
-                    $optionItems = $option->getOptionItems();
-                    ?>
-                    <?php if (!empty($optionItems)) { ?>
-                        <div class="store-product-option-group form-group">
-                            <label class="store-option-group-label"><?= $option->getName() ?></label>
-                            <select class="form-control" name="po<?= $option->getID() ?>">
-                                <?php
-                                foreach ($optionItems as $optionItem) {
-                                    if (!$optionItem->isHidden()) { ?>
-                                    <option value="<?= $optionItem->getID() ?>"><?= $optionItem->getName() ?></option>
-                                    <?php }
-                                    // below is an example of a radio button, comment out the <select> and <option> tags to use instead
-                                    //echo '<input type="radio" name="po'.$option->getID().'" value="'. $optionItem->getID(). '" />' . $optionItem->getName() . '<br />'; ?>
-                                <?php } ?>
-                            </select>
-                        </div>
-                    <?php }
-                }?>
+                    foreach ($product->getOptions() as $option) {
+                        $optionItems = $option->getOptionItems();
+                        $optionType = $option->getType();
+                        $required = $option->getRequired();
+
+                        $requiredAttr = '';
+
+                        if ($required) {
+                            $requiredAttr = ' required="required" placeholder="'.t('Required').'" ';
+                        }
+                        ?>
+
+                        <?php if (!$optionType || $optionType == 'select') { ?>
+                            <div class="store-product-option-group form-group <?= $option->getHandle() ?>">
+                                <label class="store-product-option-group-label"><?= $option->getName() ?></label>
+                                <select class="store-product-option form-control" name="po<?= $option->getID() ?>">
+                                    <?php
+                                    foreach ($optionItems as $optionItem) {
+                                        if (!$optionItem->isHidden()) { ?>
+                                            <option value="<?= $optionItem->getID() ?>"><?= $optionItem->getName() ?></option>
+                                        <?php }
+                                        // below is an example of a radio button, comment out the <select> and <option> tags to use instead
+                                        //echo '<input type="radio" name="po'.$option->getID().'" value="'. $optionItem->getID(). '" />' . $optionItem->getName() . '<br />'; ?>
+                                    <?php } ?>
+                                </select>
+                            </div>
+                        <?php } elseif ($optionType == 'text') { ?>
+                            <div class="store-product-option-group form-group <?= $option->getHandle() ?>">
+                                <label class="store-product-option-group-label"><?= $option->getName() ?></label>
+                                <input class="store-product-option-entry form-control" <?= $requiredAttr; ?> name="pt<?= $option->getID() ?>" />
+                            </div>
+                        <?php } elseif ($optionType == 'textarea') { ?>
+                            <div class="store-product-option-group form-group <?= $option->getHandle() ?>">
+                                <label class="store-product-option-group-label"><?= $option->getName() ?></label>
+                                <textarea class="store-product-option-entry form-control" <?= $requiredAttr; ?> name="pa<?= $option->getID() ?>"></textarea>
+                            </div>
+                        <?php } elseif ($optionType == 'hidden') { ?>
+                            <input type="hidden" class="store-product-option-hidden <?= $option->getHandle() ?>" name="ph<?= $option->getID() ?>" />
+                        <?php } ?>
+                    <?php } ?>
+
 
                 <input type="hidden" name="pID" value="<?= $product->getID()?>">
 
@@ -157,9 +254,9 @@ if($products){
 
                                 $('#store-form-add-to-cart-list-<?= $product->getID()?> select').each(function(){
                                     ar.push($(this).val());
-                                })
+                                });
 
-                                ar.sort();
+                                ar.sort(communityStore.sortNumber);
 
                                 var pli = $(this).closest('.store-product-list-item');
 
@@ -218,6 +315,6 @@ if($products){
     }
     
 } //if products
-else { ?>
-    <p class="alert alert-info"><?= t("No Products Available")?></p>
+elseif (is_object($c) && $c->isEditMode()) { ?>
+    <div class="ccm-edit-mode-disabled-item"><?= t("Empty Product List")?></div>
 <?php } ?>

@@ -7,10 +7,12 @@ class GroupList
 {
     public static function getGroupList()
     {
-        $queryBuilder = \Database::connection()->getEntityManager()->createQueryBuilder();
+        $em = \ORM::entityManager();
+        $queryBuilder = $em->createQueryBuilder();
 
         return $queryBuilder->select('g')
             ->from('\Concrete\Package\CommunityStore\Src\CommunityStore\Group\Group', 'g')
+            ->orderBy('g.groupName')
             ->getQuery()
             ->getResult();
     }

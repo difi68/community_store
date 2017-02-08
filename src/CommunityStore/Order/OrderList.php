@@ -1,12 +1,12 @@
 <?php
 namespace Concrete\Package\CommunityStore\Src\CommunityStore\Order;
 
-use Database;
 use Concrete\Core\Search\Pagination\Pagination;
 use Concrete\Core\Search\ItemList\Database\AttributedItemList;
 use Pagerfanta\Adapter\DoctrineDbalAdapter;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Order\Order as StoreOrder;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Order\OrderItem as StoreOrderItem;
+use Concrete\Core\Support\Facade\Application;
 
 class OrderList  extends AttributedItemList
 {
@@ -28,10 +28,24 @@ class OrderList  extends AttributedItemList
 
         if (isset($this->search)) {
             $this->query->where('oID like ?')->setParameter($paramcount++, '%'. $this->search. '%');
+
+            $app = Application::getFacadeApplication();
+            $db = $app->make('database')->connection();
+            $matchingOrders = $db->query("SELECT DISTINCT(oID) FROM CommunityStoreOrderAttributeValues csoav INNER JOIN atDefault av ON csoav.avID = av.avID WHERE av.value LIKE ?", array('%'.$this->search.'%'));
+
+            $orderIDs = array();
+            while ($value = $matchingOrders->fetchRow()) {
+                $orderIDs[] = $value['oID'];
+            }
+
+            if (!empty($orderIDs)) {
+               $this->query->orWhere('o.oID in ('.implode(',', $orderIDs).')');
+            }
         }
 
         if (isset($this->status)) {
-            $db = \Database::connection();
+            $app = Application::getFacadeApplication();
+            $db = $app->make('database')->connection();
             $matchingOrders = $db->query("SELECT oID FROM CommunityStoreOrderStatusHistories t1
                                             WHERE oshStatus = ? and
                                                 t1.oshDate = (SELECT MAX(t2.oshDate)
@@ -65,6 +79,30 @@ class OrderList  extends AttributedItemList
             $this->query->andWhere('o.oRefunded is null');
         }
 
+        if (isset($this->cancelled)) {
+            if ($this->cancelled) {
+                $this->query->andWhere('o.oCancelled is not null');
+            } else {
+                $this->query->andWhere('o.oCancelled is null');
+            }
+        }
+
+        if (isset($this->shippable)) {
+            if ($this->shippable) {
+                $this->query->andWhere('o.smName <> ""');
+            } else {
+                $this->query->andWhere('o.smName = ""');
+            }
+        }
+
+        if (isset($this->refunded)) {
+            if ($this->refunded) {
+                $this->query->andWhere('o.oRefunded is not null');
+            } else {
+                $this->query->andWhere('o.oRefunded is null');
+            }
+        }
+
         if ($this->limit > 0) {
             $this->query->setMaxResults($this->limit);
         }
@@ -72,6 +110,10 @@ class OrderList  extends AttributedItemList
         if (isset($this->externalPaymentRequested) && $this->externalPaymentRequested) {
         } else {
             $this->query->andWhere('o.externalPaymentRequested is null');
+        }
+
+        if (isset($this->cID)) {
+            $this->query->andWhere('cID = ?')->setParameter($paramcount++, $this->cID);
         }
 
         $this->query->orderBy('oID', 'DESC');
@@ -118,15 +160,34 @@ class OrderList  extends AttributedItemList
         $this->paid = $bool;
     }
 
+    public function setCancelled($bool)
+    {
+        $this->cancelled = $bool;
+    }
+
+    public function setRefunded($bool)
+    {
+        $this->refunded = $bool;
+    }
+
+    public function setIsShippable($bool){
+        $this->shippable = $bool;
+    }
+
     public function getResult($queryRow)
     {
         return StoreOrder::getByID($queryRow['oID']);
     }
 
+    public function setCustomerID($cID)
+    {
+        $this->cID = $cID;
+    }
+
     protected function createPaginationObject()
     {
         $adapter = new DoctrineDbalAdapter($this->deliverQueryObject(), function ($query) {
-            $query->select('count(distinct o.oID)')->setMaxResults(1);
+            $query->resetQueryParts(array('groupBy', 'orderBy'))->select('count(distinct o.oID)')->setMaxResults(1);
         });
         $pagination = new Pagination($this, $adapter);
 
@@ -137,12 +198,13 @@ class OrderList  extends AttributedItemList
     {
         $query = $this->deliverQueryObject();
 
-        return $query->select('count(distinct o.oID)')->setMaxResults(1)->execute()->fetchColumn();
+        return $query->resetQueryParts(array('groupBy', 'orderBy'))->select('count(distinct o.oID)')->setMaxResults(1)->execute()->fetchColumn();
     }
 
     public static function getDateOfFirstOrder()
     {
-        $db = \Database::connection();
+        $app = Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
         $date = $db->GetRow("SELECT * FROM CommunityStoreOrders ORDER BY oDate ASC LIMIT 1");
 
         return $date['oDate'];
@@ -151,7 +213,8 @@ class OrderList  extends AttributedItemList
     {
         $orders = $this->getResults();
         $orderItems = array();
-        $db = \Database::connection();
+        $app = Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
         foreach ($orders as $order) {
             $oID = $order->getOrderID();
             $OrderOrderItems = $db->GetAll("SELECT * FROM CommunityStoreOrderItems WHERE oID=?", $oID);

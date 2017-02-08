@@ -6,6 +6,7 @@ use Core;
 use Config;
 use Page;
 use Database;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Product\Product as StoreProduct;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductList as StoreProductList;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Group\GroupList as StoreGroupList;
 
@@ -39,11 +40,17 @@ class Controller extends BlockController
         $this->requireAsset('javascript', 'select2');
         $this->getGroupList();
         $this->set('groupfilters', $this->getGroupFilters());
+
+        if ($this->relatedPID) {
+            $relatedProduct = StoreProduct::getByID($this->relatedPID);
+            $this->set('relatedProduct', $relatedProduct);
+        }
     }
 
     public function getGroupFilters()
     {
-        $db = \Database::connection();
+        $app = \Concrete\Core\Support\Facade\Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
         $result = $db->query("SELECT gID FROM btCommunityStoreProductListGroups where bID = ?", array($this->bID));
 
         $list = array();
@@ -65,7 +72,25 @@ class Controller extends BlockController
     public function view()
     {
         $products = new StoreProductList();
-        $products->setSortBy($this->sortOrder);
+
+        // checks in case sort order was inadvertantly set to an option that doesn't work with the current filter
+        if ($this->sortOrder == 'category' &&  !($this->filter == 'current' || $this->filter == 'page')) {
+            $this->sortOrder = 'alpha';
+        }
+
+        if ($this->sortOrder == 'related' &&  !($this->filter == 'related' || $this->filter == 'related_product')) {
+            $this->sortOrder = 'related';
+        }
+
+        $usersort = $this->get('sort' . $this->bID);
+
+        if ($usersort && $usersort != '0') {
+            $products->setSortBy($usersort);
+            $this->set('usersort', $usersort);
+        } else {
+            $products->setSortBy($this->sortOrder);
+            $this->set('usersort', '');
+        }
 
         if ($this->sortOrder == 'alpha') {
             $products->setSortByDirection('asc');
@@ -91,6 +116,31 @@ class Controller extends BlockController
                     }
                 }
             }
+        }
+
+        if ($this->filter == 'related' || $this->filter == 'related_product') {
+
+            if ($this->filter == 'related') {
+                $cID = Page::getCurrentPage()->getCollectionID();
+                $product = StoreProduct::getByCollectionID($cID);
+            } else {
+                $product = StoreProduct::getByID($this->relatedPID);
+            }
+
+            if (is_object($product)) {
+                $products->setRelatedProduct($product);
+            } else {
+                $products->setRelatedProduct(true);
+            }
+        }
+
+        if ($this->filter == 'random') {
+            $products->setSortBy('random');
+        }
+
+        if ($this->filter == 'random_daily') {
+            $products->setSortBy('random');
+            $products->setRandomSeed(date('z'));
         }
 
         $products->setItemsPerPage($this->maxProducts > 0 ? $this->maxProducts : 1000);
@@ -133,7 +183,10 @@ class Controller extends BlockController
         $args['showDescription'] = isset($args['showDescription']) ? 1 : 0;
         $args['showQuickViewLink'] = isset($args['showQuickViewLink']) ? 1 : 0;
         $args['showPageLink'] = isset($args['showPageLink']) ? 1 : 0;
+        $args['showSortOption'] = isset($args['showSortOption']) ? 1 : 0;
+        $args['showName'] = isset($args['showName']) ? 1 : 0;
         $args['showPrice'] = isset($args['showPrice']) ? 1 : 0;
+        $args['showQuantity'] = isset($args['showQuantity']) ? 1 : 0;
         $args['showAddToCart'] = isset($args['showAddToCart']) ? 1 : 0;
         $args['showLink'] = isset($args['showLink']) ? 1 : 0;
         $args['showButton'] = isset($args['showButton']) ? 1 : 0;
@@ -142,11 +195,17 @@ class Controller extends BlockController
         $args['showFeatured'] = isset($args['showFeatured']) ? 1 : 0;
         $args['showSale'] = isset($args['showSale']) ? 1 : 0;
         $args['maxProducts'] = (isset($args['maxProducts']) && $args['maxProducts'] > 0) ? $args['maxProducts'] : 0;
+        $args['relatedPID'] = isset($args['relatedPID']) ? (int)$args['relatedPID'] : 0;
+
+        if ($args['filter'] != 'related_product') {
+            $args['relatedPID'] = 0;
+        }
 
         $filtergroups = $args['filtergroups'];
         unset($args['filtergroups']);
 
-        $db = \Database::connection();
+        $app = \Concrete\Core\Support\Facade\Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
         $vals = array($this->bID);
         $db->query("DELETE FROM btCommunityStoreProductListGroups where bID = ?", $vals);
 

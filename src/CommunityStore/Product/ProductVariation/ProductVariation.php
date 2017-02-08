@@ -6,8 +6,8 @@ use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductVariation\
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductOption\ProductOptionItem as StoreProductOptionItem;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Price as StorePrice;
 use Doctrine\Common\Collections\ArrayCollection;
-use Database;
 use File;
+use Concrete\Core\Support\Facade\Application;
 
 /**
  * @Entity
@@ -57,22 +57,22 @@ class ProductVariation
     protected $pvQtyUnlim;
 
     /**
-     * @Column(type="integer", nullable=true)
+     * @Column(type="decimal", precision=10, scale=2,nullable=true)
      */
     protected $pvWidth;
 
     /**
-     * @Column(type="integer", nullable=true)
+     * @Column(type="decimal", precision=10, scale=2,nullable=true)
      */
     protected $pvHeight;
 
     /**
-     * @Column(type="integer", nullable=true)
+     * @Column(type="decimal", precision=10, scale=2,nullable=true)
      */
     protected $pvLength;
 
     /**
-     * @Column(type="integer", nullable=true)
+     * @Column(type="decimal", precision=10, scale=2,nullable=true)
      */
     protected $pvWeight;
 
@@ -82,7 +82,7 @@ class ProductVariation
     protected $pvNumberItems;
 
     /**
-     * @OneToMany(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductVariation\ProductVariationOptionItem", mappedBy="variation"))
+     * @OneToMany(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductVariation\ProductVariationOptionItem", mappedBy="variation", cascade={"persist"}))
      */
     protected $options;
 
@@ -271,7 +271,7 @@ class ProductVariation
     public function setVariationWidth($pvWidth)
     {
         if ($pvWidth != '') {
-            $this->pvWidth = (int)$pvWidth;
+            $this->pvWidth = (float)$pvWidth;
         } else {
             $this->pvWidth = null;
         }
@@ -291,7 +291,7 @@ class ProductVariation
     public function setVariationHeight($pvHeight)
     {
         if ($pvHeight != '') {
-            $this->pvHeight = (int)$pvHeight;
+            $this->pvHeight = (float)$pvHeight;
         } else {
             $this->pvHeight = null;
         }
@@ -311,7 +311,7 @@ class ProductVariation
     public function setVariationLength($pvLength)
     {
         if ($pvLength != '') {
-            $this->pvLength = (int)$pvLength;
+            $this->pvLength = (float)$pvLength;
         } else {
             $this->pvLength = null;
         }
@@ -331,7 +331,7 @@ class ProductVariation
     public function setVariationWeight($pvWeight)
     {
         if ($pvWeight != '') {
-            $this->pvWeight = (int)$pvWeight;
+            $this->pvWeight = (float)$pvWeight;
         } else {
             $this->pvWeight = null;
         }
@@ -447,7 +447,8 @@ class ProductVariation
             }
         }
 
-        $db = \Database::connection();
+        $app = Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
 
         if (!empty($variationIDs)) {
             $options = implode(',', $variationIDs);
@@ -468,17 +469,13 @@ class ProductVariation
 
     public static function getByID($pvID)
     {
-        $db = \Database::connection();
-        $em = $db->getEntityManager();
-
+        $em = \ORM::entityManager();
         return $em->find(get_class(), $pvID);
     }
 
     public static function getBySKU($pvSKU)
     {
-        $db = \Database::connection();
-        $em = $db->getEntityManager();
-
+        $em = \ORM::entityManager();
         return $em->getRepository(get_class())->findOneBy(array('pvSKU' => $pvSKU));
     }
 
@@ -504,7 +501,8 @@ class ProductVariation
 
     public static function getByOptionItemIDs(array $optionids)
     {
-        $db = \Database::connection();
+        $app = Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
 
         if (is_array($optionids) && !empty($optionids)) {
             $options = implode(',', $optionids);
@@ -519,22 +517,20 @@ class ProductVariation
 
     public function save()
     {
-        $em = \Database::connection()->getEntityManager();
+        $em = \ORM::entityManager();
         $em->persist($this);
         $em->flush();
     }
 
     public static function getVariationsForProduct(StoreProduct $product)
     {
-        $db = \Database::connection();
-        $em = $db->getEntityManager();
-
+        $em = \ORM::entityManager();
         return $em->getRepository(get_class())->findBy(array('pID' => $product->getID()));
     }
 
     public function delete()
     {
-        $em = \Database::connection()->getEntityManager();
+        $em = \ORM::entityManager();
         $em->remove($this);
         $em->flush();
     }

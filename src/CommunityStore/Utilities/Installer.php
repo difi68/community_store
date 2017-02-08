@@ -38,6 +38,7 @@ class Installer
         self::installSinglePage('/dashboard/store/orders/attributes', $pkg);
         self::installSinglePage('/dashboard/store/products/', $pkg);
         self::installSinglePage('/dashboard/store/discounts/', $pkg);
+        self::installSinglePage('/dashboard/store/products/categories', $pkg);
         self::installSinglePage('/dashboard/store/products/attributes', $pkg);
         self::installSinglePage('/dashboard/store/settings/', $pkg);
         self::installSinglePage('/dashboard/store/settings/shipping', $pkg);
@@ -224,7 +225,6 @@ class Installer
                     'uakProfileEdit' => true,
                     'uakProfileEditRequired' => false,
                     'uakRegisterEdit' => false,
-                    'uakProfileEditRequired' => false,
                     'akCheckedByDefault' => true,
                 );
             }
@@ -273,7 +273,7 @@ class Installer
                     'akName' => t($name),
                 );
             }
-            StoreOrderKey::add($type, $data, $pkg)->setAttributeSet($set);
+            StoreOrderKey::add('store_order',$type, $data, $pkg)->setAttributeSet($set);
         }
     }
 
@@ -304,7 +304,8 @@ class Installer
     public static function installOrderStatuses($pkg)
     {
         $table = StoreOrderStatus::getTableName();
-        $db = \Database::connection();
+        $app = \Concrete\Core\Support\Facade\Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
         $statuses = array(
             array('osHandle' => 'incomplete', 'osName' => t('Awaiting Processing'), 'osInformSite' => 1, 'osInformCustomer' => 0, 'osIsStartingStatus' => 1),
             array('osHandle' => 'processing', 'osName' => t('Processing'), 'osInformSite' => 1, 'osInformCustomer' => 0, 'osIsStartingStatus' => 0),
@@ -335,22 +336,27 @@ class Installer
 
     public static function upgrade($pkg)
     {
-        $singlePage = Page::getByPath('/dashboard/store/orders/attributes');
-        if ($singlePage->error) {
-            self::installSinglePage('/dashboard/store/orders/attributes', $pkg);
-        }
 
-        $oakc = AttributeKeyCategory::getByHandle('store_order');
-        $orderChoiceSet = $oakc->getAttributeSetByHandle('order_choices');
-        if (!$orderChoiceSet instanceof AttributeSet) {
-            $orderChoiceSet = $oakc->addSet('order_choices', t('Other Customer Choices'), $pkg);
-        }
+        if (version_compare(\Config::get('concrete.version'), '8.0', '>=')) {
+            // skip this for version 8, these items would have already been installed historically
+        } else {
+            $singlePage = Page::getByPath('/dashboard/store/orders/attributes');
+            if ($singlePage->error) {
+                self::installSinglePage('/dashboard/store/orders/attributes', $pkg);
+            }
 
-        // now we refresh all blocks
-        $items = $pkg->getPackageItems();
-        if (is_array($items['block_types'])) {
-            foreach ($items['block_types'] as $item) {
-                $item->refresh();
+            $oakc = AttributeKeyCategory::getByHandle('store_order');
+            $orderChoiceSet = $oakc->getAttributeSetByHandle('order_choices');
+            if (!($orderChoiceSet instanceof \Concrete\Core\Attribute\Set)) {
+                $orderChoiceSet = $oakc->addSet('order_choices', t('Other Customer Choices'), $pkg);
+            }
+
+            // now we refresh all blocks
+            $items = $pkg->getPackageItems();
+            if (is_array($items['block_types'])) {
+                foreach ($items['block_types'] as $item) {
+                    $item->refresh();
+                }
             }
         }
         Localization::clearCache();

@@ -1,7 +1,6 @@
 <?php
 namespace Concrete\Package\CommunityStore\Src\CommunityStore\Order;
 
-use Database;
 use User;
 use Core;
 use Concrete\Core\Mail\Service as MailService;
@@ -26,6 +25,7 @@ use Concrete\Package\CommunityStore\Src\CommunityStore\Payment\Method as StorePa
 use Concrete\Package\CommunityStore\Src\CommunityStore\Utilities\Calculator as StoreCalculator;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Customer\Customer as StoreCustomer;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Discount\DiscountCode as StoreDiscountCode;
+use Concrete\Core\Support\Facade\Application;
 
 /**
  * @Entity
@@ -56,6 +56,24 @@ class Order
 
     /** @Column(type="text",nullable=true) */
     protected $sInstructions;
+
+    /** @Column(type="text",nullable=true) */
+    protected $sShipmentID;
+
+    /** @Column(type="text",nullable=true) */
+    protected $sRateID;
+
+    /** @Column(type="text",nullable=true) */
+    protected $sCarrier;
+
+    /** @Column(type="text",nullable=true) */
+    protected $sTrackingID;
+
+    /** @Column(type="text",nullable=true) */
+    protected $sTrackingCode;
+
+    /** @Column(type="text",nullable=true) */
+    protected $sTrackingURL;
 
     /** @Column(type="decimal", precision=10, scale=2) * */
     protected $oShippingTotal;
@@ -142,6 +160,65 @@ class Order
     public function setShippingInstructions($sInstructions)
     {
         $this->sInstructions = $sInstructions;
+    }
+
+    public function setShipmentID($shipmentID)
+    {
+        $this->sShipmentID = $shipmentID;
+    }
+
+    public function getShipmentID(){
+        return $this->sShipmentID;
+    }
+
+    public function getRateID()
+    {
+        return $this->sRateID;
+    }
+
+    public function setRateID($sRateID)
+    {
+        $this->sRateID = $sRateID;
+    }
+
+    public function getCarrier()
+    {
+        return $this->sCarrier;
+    }
+
+    public function setCarrier($sCarrier)
+    {
+        $this->sCarrier = $sCarrier;
+    }
+
+    public function getTrackingID()
+    {
+        return $this->sTrackingID;
+    }
+
+    public function setTrackingID($sTrackingID)
+    {
+        $this->sTrackingID = $sTrackingID;
+    }
+
+    public function getTrackingCode()
+    {
+        return $this->sTrackingCode;
+    }
+
+    public function setTrackingCode($sTrackingCode)
+    {
+        $this->sTrackingCode = $sTrackingCode;
+    }
+
+    public function getTrackingURL()
+    {
+        return $this->sTrackingURL;
+    }
+
+    public function setTrackingURL($sTrackingURL)
+    {
+        $this->sTrackingURL = $sTrackingURL;
     }
 
     public function setShippingTotal($shippingTotal)
@@ -371,17 +448,13 @@ class Order
 
     public static function getByID($oID)
     {
-        $db = \Database::connection();
-        $em = $db->getEntityManager();
-
+        $em = \ORM::entityManager();
         return $em->find(get_class(), $oID);
     }
 
     public function getCustomersMostRecentOrderByCID($cID)
     {
-        $db = \Database::connection();
-        $em = $db->getEntityManager();
-
+        $em = \ORM::entityManager();
         return $em->getRepository(get_class())->findOneBy(array('cID' => $cID));
     }
 
@@ -393,11 +466,13 @@ class Order
      *
      * @return Order
      */
-    public function add($data, $pm, $transactionReference = '', $status = null)
+    public static function add($pm, $transactionReference = '', $status = null)
     {
         $customer = new StoreCustomer();
         $now = new \DateTime();
         $smName = StoreShippingMethod::getActiveShippingLabel();
+        $sShipmentID = StoreShippingMethod::getActiveShipmentID();
+        $sRateID = StoreShippingMethod::getActiveRateID();
         $sInstructions = StoreCart::getShippingInstructions();
         $totals = StoreCalculator::getTotals();
         StoreCart::getShippingInstructions('');
@@ -436,6 +511,8 @@ class Order
         $order->setPaymentMethodName($pmDisplayName ? $pmDisplayName : $pmName);
         $order->setPaymentMethodID($pm->getID());
         $order->setShippingMethodName($smName);
+        $order->setShipmentID($sShipmentID);
+        $order->setRateID($sRateID);
         $order->setShippingInstructions($sInstructions);
         $order->setShippingTotal($shippingTotal);
         $order->setTaxTotal($taxTotal);
@@ -478,7 +555,7 @@ class Order
         $order->addOrderItems(StoreCart::getCart(), $discountRatio);
 
         if (!$pm->getMethodController()->isExternal()) {
-            $order->completeOrder($transactionReference);
+            $order->completeOrder($transactionReference, true);
         }
 
         return $order;
@@ -514,7 +591,9 @@ class Order
         }
     }
 
-    public function completeOrder($transactionReference = null)
+    // if sameRequest = true, it's indicating that the same request used to place the order
+    // is also completing the order (i.e. the customer, not an external callback)
+    public function completeOrder($transactionReference = null, $sameRequest = false)
     {
         if ($transactionReference) {
             $this->setTransactionReference($transactionReference);
@@ -528,7 +607,7 @@ class Order
             if ($paymentMethodUsed) {
                 // if the payment method actually is a payment (as opposed to an invoice), mark order as paid
                 if ($paymentMethodUsed->getMethodController()->markPaid()) {
-                    $this->setPaid(new \DateTime());
+                   $this->completePayment($sameRequest);
                 }
             }
         }
@@ -536,18 +615,33 @@ class Order
         $this->setExternalPaymentRequested(null);
         $this->save();
 
-        $fromEmail = Config::get('community_store.emailalerts');
-        if (!$fromEmail) {
-            $fromEmail = "store@" . $_SERVER['SERVER_NAME'];
-        }
+        // create order event and dispatch
+        $event = new StoreOrderEvent($this);
+        Events::dispatch('on_community_store_order', $event);
 
-        $fromName = Config::get('community_store.emailalertsname');
+        //receipt
+        $this->sendOrderReceipt();
 
-        $smID = \Session::get('community_store.smID');
+        // notifications
+        $this->sendNotifications();
+
+        return $this;
+    }
+
+    public function completePayment($sameRequest = false) {
+        $this->setPaid(new \DateTime());
+        $this->completePostPaymentProcesses($sameRequest);
+
+        // create payment event and dispatch
+        $event = new StoreOrderEvent($this);
+        Events::dispatch('on_community_store_payment_complete', $event);
+    }
+
+    public function completePostPaymentProcesses($sameRequest = false) {
         $groupstoadd = array();
         $createlogin = false;
         $orderItems = $this->getOrderItems();
-        $customer = new StoreCustomer();
+
         foreach ($orderItems as $orderItem) {
             $product = $orderItem->getProductObject();
             if ($product && $product->hasUserGroups()) {
@@ -562,7 +656,15 @@ class Order
             }
         }
 
-        if ($createlogin && $customer->isGuest()) {
+        if($sameRequest) {
+            $customer = new StoreCustomer();  // fetch current customer
+        } else {
+            $customer = new StoreCustomer($this->getCustomerID()); // find customer from order as it's a remote call
+        }
+
+        $user = $customer->getUserInfo();
+
+        if ($createlogin && !$user) {
             $email = $this->getAttribute('email');
             $user = UserInfo::getByEmail($email);
 
@@ -599,7 +701,8 @@ class Order
                     $newusername .= rand(0, 9);
                 }
 
-                $user = UserInfo::add(array('uName' => $newusername, 'uEmail' => trim($email), 'uPassword' => $password));
+                $userRegistrationService = \Core::make('Concrete\Core\User\RegistrationServiceInterface');
+                $newuser = $userRegistrationService->create(array('uName' => $newusername, 'uEmail' => trim($email), 'uPassword' => $password));
 
                 if (Config::get('concrete.user.registration.email_registration')) {
                     $mh->addParameter('username', trim($email));
@@ -612,8 +715,20 @@ class Order
 
                 $mh->load('new_user', 'community_store');
 
-                // login the newly created user
-                User::loginByUserID($user->getUserID());
+                $user = new User();
+
+                // login the newly created user if in same request as customer
+                if (!$user->isLoggedIn() && $sameRequest) {
+                    User::loginByUserID($newuser->getUserID());
+                }
+
+                $user = $newuser;
+
+                $fromName = Config::get('community_store.emailalertsname');
+                $fromEmail = Config::get('community_store.emailalerts');
+                if (!$fromEmail) {
+                    $fromEmail = "store@" . $_SERVER['SERVER_NAME'];
+                }
 
                 // new user password email
                 if ($fromName) {
@@ -624,13 +739,7 @@ class Order
 
                 $mh->to($email);
                 $mh->sendMail();
-            } else {
-                // we're attempting to create a new user with an email that has already been used
-                // earlier validation must have failed at this point, don't fetch the user
-                $user = null;
             }
-        } elseif ($createlogin) {  // or if we found a user (because they are logged in) and need to use it to create logins
-            $user = $customer->getUserInfo();
         }
 
         if ($user) {  // $user is going to either be the new one, or the user of the currently logged in customer
@@ -639,13 +748,13 @@ class Order
             $this->setCustomerID($user->getUserID());
             $this->save();
 
-            $billing_first_name = $customer->getValue("billing_first_name");
-            $billing_last_name = $customer->getValue("billing_last_name");
-            $billing_address = $customer->getValueArray("billing_address");
-            $billing_phone = $customer->getValue("billing_phone");
-            $shipping_first_name = $customer->getValue("shipping_first_name");
-            $shipping_last_name = $customer->getValue("shipping_last_name");
-            $shipping_address = $customer->getValueArray("shipping_address");
+            $billing_first_name = $this->getAttribute("billing_first_name");
+            $billing_last_name = $this->getAttribute("billing_last_name");
+            $billing_address = $this->getAttribute("billing_address");
+            $billing_phone = $this->getAttribute("billing_phone");
+            $shipping_first_name = $this->getAttribute("shipping_first_name");
+            $shipping_last_name = $this->getAttribute("shipping_last_name");
+            $shipping_address = $this->getAttribute("shipping_address");
 
             // update the  user's attributes
             $customer = new StoreCustomer($user->getUserID());
@@ -672,22 +781,34 @@ class Order
                     $user->getUserObject()->enterGroup($g);
                 }
             }
-
-            $u = new \User();
-            $u->refreshUserGroups();
         }
+    }
 
-        StoreDiscountCode::clearCartCode();
-
-        // create order event and dispatch
-        $event = new StoreOrderEvent($this);
-        Events::dispatch('on_community_store_order', $event);
-
-        //send out the alerts
+    public function sendNotifications() {
         $mh = new MailService();
 
         $notificationEmails = explode(",", Config::get('community_store.notificationemails'));
         $notificationEmails = array_map('trim', $notificationEmails);
+        $validNotification = false;
+
+        $fromName = Config::get('community_store.emailalertsname');
+        $fromEmail = Config::get('community_store.emailalerts');
+        if (!$fromEmail) {
+            $fromEmail = "store@" . $_SERVER['SERVER_NAME'];
+        }
+
+        //order notification
+        if ($fromName) {
+            $mh->from($fromEmail, $fromName);
+        } else {
+            $mh->from($fromEmail);
+        }
+
+        $orderChoicesAttList = StoreOrderKey::getAttributeListBySet('order_choices');
+
+        if (!is_array($orderChoicesAttList)) {
+            $orderChoicesAttList = array();
+        }
 
         // Create "on_before_community_store_order_notification_emails" event and dispatch
         $event = new StoreOrderEvent($this);
@@ -695,14 +816,48 @@ class Order
         $event = Events::dispatch('on_before_community_store_order_notification_emails', $event);
         $notificationEmails = $event->getNotificationEmails();
 
-        //receipt
+
+        foreach ($notificationEmails as $notificationEmail) {
+            if ($notificationEmail) {
+                $mh->to($notificationEmail);
+                $validNotification = true;
+            }
+        }
+
+        if ($validNotification) {
+            $mh->addParameter('orderChoicesAttList', $orderChoicesAttList);
+            $mh->addParameter("order", $this);
+            $mh->load("new_order_notification", "community_store");
+            $mh->sendMail();
+        }
+    }
+
+    public function sendOrderReceipt($email = '') {
+        $mh = new MailService();
+        $fromName = Config::get('community_store.emailalertsname');
+
+        $fromEmail = Config::get('community_store.emailalerts');
+        if (!$fromEmail) {
+            $fromEmail = "store@" . $_SERVER['SERVER_NAME'];
+        }
+
         if ($fromName) {
             $mh->from($fromEmail, $fromName);
         } else {
             $mh->from($fromEmail);
         }
 
-        $mh->to($customer->getEmail());
+        if ($email) {
+            $mh->to($email);
+        } else {
+            $mh->to($this->getAttribute('email'));
+        }
+
+        $pmID = $this->getPaymentMethodID();
+
+        if ($pmID) {
+            $paymentMethodUsed = StorePaymentMethod::getByID($this->getPaymentMethodID());
+        }
 
         $paymentInstructions = '';
         if ($paymentMethodUsed) {
@@ -720,36 +875,6 @@ class Order
         $mh->addParameter("order", $this);
         $mh->load("order_receipt", "community_store");
         $mh->sendMail();
-
-        $validNotification = false;
-
-        //order notification
-        if ($fromName) {
-            $mh->from($fromEmail, $fromName);
-        } else {
-            $mh->from($fromEmail);
-        }
-
-        foreach ($notificationEmails as $notificationEmail) {
-            if ($notificationEmail) {
-                $mh->to($notificationEmail);
-                $validNotification = true;
-            }
-        }
-
-        if ($validNotification) {
-            $mh->addParameter('orderChoicesAttList', $orderChoicesAttList);
-            $mh->addParameter("order", $this);
-            $mh->load("new_order_notification", "community_store");
-            $mh->sendMail();
-        }
-
-        // unset the shipping type, as next order might be unshippable
-        \Session::set('community_store.smID', '');
-
-        StoreCart::clear();
-
-        return $this;
     }
 
     public function addOrderItems($cart, $discountRatio = 1)
@@ -783,22 +908,22 @@ class Order
 
     public function save()
     {
-        $em = \Database::connection()->getEntityManager();
+        $em = \ORM::entityManager();
         $em->persist($this);
         $em->flush();
     }
 
     public function delete()
     {
-        $this->getShippingMethodTypeMethod()->delete();
-        $em = \Database::connection()->getEntityManager();
+        $em = \ORM::entityManager();
         $em->remove($this);
         $em->flush();
     }
 
     public function remove()
     {
-        $db = \Database::connection();
+        $app = Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
         $rows = $db->GetAll("SELECT * FROM CommunityStoreOrderItems WHERE oID=?", $this->oID);
         foreach ($rows as $row) {
             $db->query("DELETE FROM CommunityStoreOrderItemOptions WHERE oiID=?", array($row['oiID']));
@@ -876,7 +1001,8 @@ class Order
 
     public function getAttributeValueObject($ak, $createIfNotFound = false)
     {
-        $db = \Database::connection();
+        $app = Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
         $av = false;
         $v = array($this->getOrderID(), $ak->getAttributeKeyID());
         $avID = $db->GetOne("SELECT avID FROM CommunityStoreOrderAttributeValues WHERE oID = ? AND akID = ?", $v);
@@ -906,7 +1032,8 @@ class Order
 
     public function addDiscount($discount, $code = '')
     {
-        $db = \Database::connection();
+        $app = Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
 
         //add the discount
         $vals = array($this->oID, $discount->drName, $discount->getDisplay(), $discount->drValue, $discount->drPercentage, $discount->drDeductFrom, $code);
@@ -915,7 +1042,8 @@ class Order
 
     public function getAppliedDiscounts()
     {
-        $db = \Database::connection();
+        $app = Application::getFacadeApplication();
+        $db = $app->make('database')->connection();
         $rows = $db->GetAll("SELECT * FROM CommunityStoreOrderDiscounts WHERE oID=?", $this->oID);
 
         return $rows;

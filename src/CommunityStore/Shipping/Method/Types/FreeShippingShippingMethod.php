@@ -45,19 +45,19 @@ class FreeShippingShippingMethod extends ShippingMethodTypeMethod
 
     public function setMinimumAmount($minAmount)
     {
-        $this->minimumAmount = $minAmount;
+        $this->minimumAmount = $minAmount > 0 ? $minAmount : 0;
     }
     public function setMaximumAmount($maxAmount)
     {
-        $this->maximumAmount = $maxAmount;
+        $this->maximumAmount = $maxAmount > 0 ? $maxAmount : 0;
     }
     public function setMinimumWeight($minWeight)
     {
-        $this->minimumWeight = $minWeight;
+        $this->minimumWeight = $minWeight > 0 ? $minWeight : 0;
     }
     public function setMaximumWeight($maxWeight)
     {
-        $this->maximumWeight = $maxWeight;
+        $this->maximumWeight = $maxWeight > 0 ? $maxWeight : 0;
     }
     public function setCountries($countries)
     {
@@ -119,7 +119,7 @@ class FreeShippingShippingMethod extends ShippingMethodTypeMethod
         }
         $sm->setCountriesSelected($countriesSelected);
 
-        $em = \Database::connection()->getEntityManager();
+        $em = \ORM::entityManager();
         $em->persist($sm);
         $em->flush();
 

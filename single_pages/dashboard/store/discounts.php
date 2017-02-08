@@ -24,13 +24,15 @@ $currencySymbol = Config::get('community_store.symbol');
     <div class="ccm-dashboard-content-full">
         <table class="ccm-search-results-table">
             <thead>
-                <th><a><?= t('Name')?></a></th>
-                <th><a><?= t('Display')?></a></th>
-                <th><a><?= t('Discount')?></a></th>
-                <th><a><?= t('Applies')?></a></th>
-                <th><a><?= t('Availability')?></a></th>
-                <th><a><?= t('Enabled')?></a></th>
-                <th><a><?= t('Actions')?></a></th>
+                <tr>
+                    <th><a><?= t('Name')?></a></th>
+                    <th><a><?= t('Display')?></a></th>
+                    <th><a><?= t('Discount')?></a></th>
+                    <th><a><?= t('Applies')?></a></th>
+                    <th><a><?= t('Availability')?></a></th>
+                    <th><a><?= t('Enabled')?></a></th>
+                    <th><a><?= t('Actions')?></a></th>
+                </tr>
             </thead>
             <tbody>
 
@@ -258,7 +260,7 @@ $currencySymbol = Config::get('community_store.symbol');
             <?= $form->textarea('drDescription', $discountRule->getDescription(), array('class' => 'span5'))?>
         </div>
 
-
+        <br /><br /><br /><br />
 
     </div>
 
@@ -337,7 +339,7 @@ $currencySymbol = Config::get('community_store.symbol');
 <?php } ?>
 
 <?php if (isset($failedcodes) && count($failedcodes) > 0 ) { ?>
-    <p class="alert alert-warning"><?= t('The following codes are were invalid or are already active:')  ?><br />
+    <p class="alert alert-warning"><?= t('The following codes are invalid or are already active:')  ?><br />
         <strong><?= implode('<br />', $failedcodes); ?></strong>
     </p>
 <?php } ?>
@@ -369,7 +371,7 @@ $currencySymbol = Config::get('community_store.symbol');
 
                         <?php if ($code->isUsed()) { ?>
                             <tr>
-                                <td><strike><?= $code->getCode(); ?></strike></td>
+                                <td><del><?= $code->getCode(); ?></del></td>
                                 <td><a class="btn btn-default btn-xs" href="<?= \URL::to('/dashboard/store/orders/order/', $code->getOID()); ?>"><?= t('View Order'); ?></a></td>
                                 <td></td>
                             </tr>

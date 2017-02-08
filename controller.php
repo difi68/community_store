@@ -10,16 +10,17 @@ use Route;
 use Asset;
 use AssetList;
 use URL;
+use Core;
 
 class Controller extends Package
 {
     protected $pkgHandle = 'community_store';
     protected $appVersionRequired = '5.7.5';
-    protected $pkgVersion = '0.9.8.7';
+    protected $pkgVersion = '1.1.0';
 
     public function getPackageDescription()
     {
-        return t("Add a Store to your Site");
+        return t("Add a store to your site");
     }
 
     public function getPackageName()
@@ -50,12 +51,8 @@ class Controller extends Package
 
     public function install()
     {
-        if (!class_exists("SOAPClient")) {
-            throw new ErrorException(t('This package requires that the SOAP client for PHP is installed'));
-        } else {
-            parent::install();
-            $this->installStore();
-        }
+        parent::install();
+        $this->installStore();
     }
 
     public function upgrade()
@@ -99,6 +96,16 @@ class Controller extends Package
                 array('css', 'chartist-tooltip'),
             )
         );
+
+
+        if (Core::make('app')->isRunThroughCommandLineInterface()) {
+            try {
+                $app = Core::make('console');
+                $app->add(new Src\CommunityStore\Console\Command\ResetCommand());
+
+            } catch (Exception $e) {}
+        }
+
     }
     public function uninstall()
     {

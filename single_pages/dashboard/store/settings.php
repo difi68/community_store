@@ -15,7 +15,7 @@
                             <li><a href="#settings-tax" data-pane-toggle><?= t('Tax')?></a></li>
                             <li><a href="#settings-shipping" data-pane-toggle><?= t('Shipping')?></a></li>
                             <li><a href="#settings-payments" data-pane-toggle><?= t('Payments')?></a></li>
-                            <li><a href="#settings-order-statuses" data-pane-toggle><?= t('Order Statuses')?></a></li>
+                            <li><a href="#settings-order-statuses" data-pane-toggle><?= t('Fulfilment Statuses')?></a></li>
                             <li><a href="#settings-notifications" data-pane-toggle><?= t('Notifications and Receipts')?></a></li>
                             <li><a href="#settings-products" data-pane-toggle><?= t('Products')?></a></li>
                             <li><a href="#settings-checkout" data-pane-toggle><?= t('Cart and Checkout')?></a></li>
@@ -69,7 +69,7 @@
                             <div class="form-group">
                                 <?= $form->label('weightUnit',t('Units for Weight'));?>
                                 <?php // do not add other units to this list. these are specific to making calculated shipping work ?>
-                                <?= $form->select('weightUnit',array('lb'=>t('lb'),'kg'=>t('kg'),'g'=>t('g')),Config::get('community_store.weightUnit'));?>
+                                <?= $form->select('weightUnit',array('oz'=>t('oz'),'lb'=>t('lb'),'kg'=>t('kg'),'g'=>t('g')),Config::get('community_store.weightUnit'));?>
                             </div>
                         </div>
                         <div class="col-xs-6">
@@ -142,7 +142,7 @@
                     <script>
                         $(function(){
                             $('.paymentMethodEnabled SELECT').on('change',function(){
-                                $this = $(this);
+                                var $this = $(this);
                                 if ($this.val()==1) {
                                     $this.parent().next().slideDown();
                                 } else {
@@ -154,7 +154,7 @@
                 </div><!-- #settings-payments -->
 
                 <div class="col-sm-9 store-pane" id="settings-order-statuses">
-                    <h3><?= t("Order Statuses")?></h3>
+                    <h3><?= t("Fulfilment Statuses")?></h3>
                     <?php
                     if(count($orderStatuses)>0){ ?>
                         <div class="panel panel-default">
@@ -200,7 +200,7 @@
 
                     <?php
                     } else {
-                        echo t("No Order Statuses are available");
+                        echo t("No Fulfilment Statuses are available");
                     }
                     ?>
 

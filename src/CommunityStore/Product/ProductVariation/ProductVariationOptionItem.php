@@ -22,7 +22,7 @@ class ProductVariationOptionItem
     protected $variation;
 
     /**
-     * @ManyToOne(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductOption\ProductOptionItem",cascade={"persist"})
+     * @ManyToOne(targetEntity="Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductOption\ProductOptionItem")
      * @JoinColumn(name="poiID", referencedColumnName="poiID", onDelete="CASCADE")
      */
     protected $option;
@@ -54,7 +54,7 @@ class ProductVariationOptionItem
 
     public function save()
     {
-        $em = \Database::connection()->getEntityManager();
+        $em = \ORM::entityManager();
         $em->persist($this);
         $em->flush();
     }
